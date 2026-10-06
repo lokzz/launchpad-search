@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
@@ -69,7 +70,13 @@ class ResultScrollAdapter(private val mResults: List<ResultAdapter>, private var
             holder.resultExtra.visibility = View.GONE
         }
 
-        holder.resultIcon.setImageDrawable(mResultAdapter.image)
+        // Explicit fallback: setImageDrawable(null) would clear the layout's
+        // placeholder AND leave a recycled view showing the previous row's icon,
+        // so always bind something.
+        holder.resultIcon.setImageDrawable(
+            mResultAdapter.image
+                ?: AppCompatResources.getDrawable(mContext, R.drawable.ic_launcher_background)
+        )
 
         if (mResultAdapter.action1 != null) {
             holder.parentView.setOnClickListener {

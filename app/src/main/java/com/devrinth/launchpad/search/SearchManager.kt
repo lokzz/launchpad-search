@@ -348,7 +348,10 @@ class SearchManager(
     }
 
     private fun resultMatchesQuery(result: ResultAdapter, query: String): Boolean {
-        return result.value.contains(query, ignoreCase = true)
+        // Check the package id too: AppsPlugin matches on package name, so a
+        // label-only check here would drop package-only hits while typing forward.
+        return result.value.contains(query, ignoreCase = true) ||
+            (result.extra?.contains(query, ignoreCase = true) == true)
     }
 
     private fun suggestionMatchesQuery(suggestion: ResultAdapter, query: String): Boolean {
