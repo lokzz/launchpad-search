@@ -21,8 +21,8 @@ jobs:
       # ubuntu-latest runners ship an SDK already; just ensure API 35 is present.
       - name: Ensure Android API 35 packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Run unit tests
         run: chmod +x gradlew && ./gradlew :app:testDebugUnitTest --stacktrace
@@ -49,8 +49,8 @@ jobs:
 
       - name: Ensure Android API 35 packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       # Debug APK only -- uses the auto-generated debug keystore, no signing cert needed.
       - name: Assemble debug APK
