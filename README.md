@@ -1,3 +1,5 @@
+! note: this fork was made by AI; only uploaded here just to get Github Actions working.
+
 
 # Launchpad Search - Shortcuts
 <br>
