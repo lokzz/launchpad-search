@@ -22,14 +22,13 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="top"
-        android:paddingTop="@dimen/parent_layout_padding_top"
+        android:paddingTop="@dimen/search_popup_top_margin"
         android:paddingBottom="@dimen/parent_layout_padding_top">
 
         <androidx.cardview.widget.CardView
             android:id="@+id/search_card_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/search_popup_top_margin"
             style="@style/Theme.Launchpad.Search">
 
             <LinearLayout
