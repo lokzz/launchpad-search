@@ -25,7 +25,23 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Pinned debug keystore (app/debug.keystore, standard android/android
+    // credentials) so every CI/local debug build shares one signature and
+    // installs as an update instead of demanding an uninstall. Debug only --
+    // release signing is untouched.
+    signingConfigs {
+        create("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
