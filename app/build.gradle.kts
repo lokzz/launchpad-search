@@ -30,7 +30,9 @@ android {
     // installs as an update instead of demanding an uninstall. Debug only --
     // release signing is untouched.
     signingConfigs {
-        create("debug") {
+        // AGP already creates a "debug" config -- just repoint it at the
+        // pinned keystore instead of creating a second one.
+        getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
@@ -39,9 +41,6 @@ android {
     }
 
     buildTypes {
-        debug {
-            signingConfig = signingConfigs.getByName("debug")
-        }
         release {
             isMinifyEnabled = true
             proguardFiles(
