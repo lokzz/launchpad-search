@@ -254,9 +254,12 @@ class SearchManager(
                              searchQuery.startsWith(previousQuery, ignoreCase = true)
 
         if (searchQuery.isEmpty()) {
-            resultRecyclerView.visibility = View.GONE
+            resultRecyclerView.visibility = View.VISIBLE
             clearAllResults()
             clearAllSuggestions()
+            // Empty query: only AppsPlugin responds, with top hits (apps
+            // launched >3x in the last 2 days). Other plugins stay quiet.
+            (pluginsMap["apps"] as? AppsPlugin)?.pluginProcess(searchQuery)
             previousQuery = searchQuery
             return
         } else {

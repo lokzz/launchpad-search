@@ -17,8 +17,11 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devrinth.launchpad.R
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
+import com.devrinth.launchpad.search.plugins.AppLaunchHistory
 
 class ResultScrollAdapter(private val mResults: List<ResultAdapter>, private var mContext: Context) : RecyclerView.Adapter<ResultScrollAdapter.ViewHolder>() {
+
+    private val appLaunchHistory by lazy { AppLaunchHistory(mContext.applicationContext) }
 
     private val sharedPreferences: SharedPreferences =
         PreferenceManager.getDefaultSharedPreferences(mContext)
@@ -80,6 +83,16 @@ class ResultScrollAdapter(private val mResults: List<ResultAdapter>, private var
 
         if (mResultAdapter.action1 != null) {
             holder.parentView.setOnClickListener {
+                // Record app launches so AppsPlugin can rank frequent apps
+                // first and show top hits on an empty query.
+                if (mResultAdapter.sourcePlugin == "apps") {
+                    mResultAdapter.extra?.let { packageName ->
+                        try {
+                            appLaunchHistory.recordLaunch(packageName)
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
                 if (closeOnClick) {
                     mContext.sendBroadcast(Intent(AssistantActionReceiver.ACTION_OVERLAY_HIDE))
                 }
