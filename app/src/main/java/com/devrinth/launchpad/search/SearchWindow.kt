@@ -9,6 +9,7 @@ import android.os.Build
 import android.service.voice.VoiceInteractionSessionService
 import android.text.method.ScrollingMovementMethod
 import android.util.Log
+import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.Window
@@ -20,6 +21,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.view.animation.PathInterpolatorCompat
 import androidx.preference.PreferenceManager
@@ -38,8 +40,6 @@ class SearchWindow(val context: Context) {
     private lateinit var closeBtn : ImageButton
     private lateinit var settingsBtn : ImageButton
     private lateinit var debugBtn : ImageButton
-    private lateinit var debugWrap : View
-    private lateinit var debugDot : View
     private lateinit var debugPanel : TextView
 
     /** Debug button stage: 0 off (hollow dot) -> 1 small (yellow) -> 2 full (green). */
@@ -99,13 +99,11 @@ class SearchWindow(val context: Context) {
         closeBtn = contentView.findViewById(R.id.action_close)
         settingsBtn = contentView.findViewById(R.id.action_settings)
         debugBtn = contentView.findViewById(R.id.action_debug)
-        debugWrap = contentView.findViewById(R.id.debug_button_wrap)
-        debugDot = contentView.findViewById(R.id.debug_dot)
         debugPanel = contentView.findViewById(R.id.debug_panel)
         debugPanel.movementMethod = ScrollingMovementMethod.getInstance()
 
         if (sharedPreferences.getBoolean("setting_debug_button", false)) {
-            debugWrap.visibility = View.VISIBLE
+            debugBtn.visibility = View.VISIBLE
             debugStage = sharedPreferences.getInt("setting_debug_stage", 0).coerceIn(0, 2)
             applyDebugStage()
         }
@@ -239,15 +237,17 @@ class SearchWindow(val context: Context) {
         }
     }
 
-    /** Applies the current debug stage: dot drawable + panel visibility/content. */
+    /** Applies the current debug stage: icon tint + panel visibility/content. */
     private fun applyDebugStage() {
-        debugDot.setBackgroundResource(
-            when (debugStage) {
-                1 -> R.drawable.debug_dot_small
-                2 -> R.drawable.debug_dot_full
-                else -> R.drawable.debug_dot_off
-            }
-        )
+        // No dot: the icon tint itself is the state. Default grey = off,
+        // yellow = small panel, green = full panel.
+        when (debugStage) {
+            1 -> debugBtn.setColorFilter(
+                ContextCompat.getColor(context, R.color.debug_small), PorterDuff.Mode.SRC_IN)
+            2 -> debugBtn.setColorFilter(
+                ContextCompat.getColor(context, R.color.debug_full), PorterDuff.Mode.SRC_IN)
+            else -> debugBtn.clearColorFilter()
+        }
         if (debugStage == 0) {
             debugPanel.visibility = View.GONE
         } else {
