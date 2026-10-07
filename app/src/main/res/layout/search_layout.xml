@@ -45,16 +45,33 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <ImageButton
+                    <FrameLayout
+                        android:id="@+id/debug_button_wrap"
                         android:layout_width="@dimen/search_action_button_geometry"
                         android:layout_height="@dimen/search_action_button_geometry"
                         android:layout_margin="@dimen/default_spacing"
-                        android:id="@+id/action_debug"
-                        android:visibility="gone"
-                        android:background="@android:color/transparent"
-                        android:src="@drawable/baseline_extension_24"
-                        android:contentDescription="@string/settings_debug_button"
-                        />
+                        android:visibility="gone">
+
+                        <ImageButton
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:id="@+id/action_debug"
+                            android:visibility="gone"
+                            android:background="@android:color/transparent"
+                            android:src="@drawable/baseline_extension_24"
+                            android:contentDescription="@string/settings_debug_button"
+                            />
+
+                        <View
+                            android:id="@+id/debug_dot"
+                            android:layout_width="10dp"
+                            android:layout_height="10dp"
+                            android:layout_gravity="bottom|end"
+                            android:layout_marginEnd="6dp"
+                            android:layout_marginBottom="6dp"
+                            android:background="@drawable/debug_dot_off" />
+
+                    </FrameLayout>
 
                     <Space
                         android:layout_width="0dp"
@@ -88,6 +105,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:visibility="gone"
+                    android:maxLines="10"
+                    android:scrollbars="vertical"
                     android:paddingHorizontal="@dimen/search_bar_input_padding"
                     android:paddingBottom="@dimen/default_spacing"
                     android:textColor="@color/text_secondary"

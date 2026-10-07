@@ -232,6 +232,10 @@ class SearchManager(
         }
 
         if (newResults.isNotEmpty()) {
+            // Tag untagged results with the producing plugin before they enter
+            // the displayed set (data-class equality includes the tag, so this
+            // must happen before any set insertion).
+            newResults.forEach { it.sourcePlugin = it.sourcePlugin ?: plugin }
             val startIndex = resultArray.size
             resultArray.addAll(newResults)
             displayedResults.addAll(newResults)

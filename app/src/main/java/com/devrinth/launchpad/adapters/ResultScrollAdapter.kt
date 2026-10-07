@@ -60,6 +60,13 @@ class ResultScrollAdapter(private val mResults: List<ResultAdapter>, private var
         return mResults.size
     }
 
+    /** "pluginId:count" breakdown of currently displayed results, e.g. "apps:2, websearch:1". */
+    fun resultPluginBreakdown(): String {
+        return mResults.groupingBy { it.sourcePlugin ?: "other" }.eachCount()
+            .toList().sortedByDescending { it.second }
+            .joinToString(",") { "${it.first}:${it.second}" }
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val mResultAdapter : ResultAdapter = mResults[position]
 

@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.os.Build
 import android.service.voice.VoiceInteractionSessionService
+import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.Window
@@ -18,6 +19,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.cardview.widget.CardView
+import androidx.core.content.edit
 import androidx.core.view.animation.PathInterpolatorCompat
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
@@ -25,15 +27,22 @@ import com.devrinth.launchpad.R
 import com.devrinth.launchpad.activities.SettingsActivity
 import com.devrinth.launchpad.adapters.PinnedActionAdapter
 import com.devrinth.launchpad.adapters.PinnedActionListAdapter
+import com.devrinth.launchpad.adapters.ResultScrollAdapter
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
 import com.devrinth.launchpad.search.plugins.AppLaunchHistory
+import com.devrinth.launchpad.search.plugins.AppUsageStats
 
 class SearchWindow(val context: Context) {
 
     private lateinit var closeBtn : ImageButton
     private lateinit var settingsBtn : ImageButton
     private lateinit var debugBtn : ImageButton
+    private lateinit var debugWrap : View
+    private lateinit var debugDot : View
     private lateinit var debugPanel : TextView
+
+    /** Debug button stage: 0 off (hollow dot) -> 1 small (yellow) -> 2 full (green). */
+    private var debugStage: Int = 0
 
     private lateinit var searchInput : EditText
     private lateinit var resultsView : RecyclerView
@@ -89,10 +98,15 @@ class SearchWindow(val context: Context) {
         closeBtn = contentView.findViewById(R.id.action_close)
         settingsBtn = contentView.findViewById(R.id.action_settings)
         debugBtn = contentView.findViewById(R.id.action_debug)
+        debugWrap = contentView.findViewById(R.id.debug_button_wrap)
+        debugDot = contentView.findViewById(R.id.debug_dot)
         debugPanel = contentView.findViewById(R.id.debug_panel)
+        debugPanel.movementMethod = ScrollingMovementMethod.getInstance()
 
         if (sharedPreferences.getBoolean("setting_debug_button", false)) {
-            debugBtn.visibility = View.VISIBLE
+            debugWrap.visibility = View.VISIBLE
+            debugStage = sharedPreferences.getInt("setting_debug_stage", 0).coerceIn(0, 2)
+            applyDebugStage()
         }
 
     }
@@ -111,12 +125,10 @@ class SearchWindow(val context: Context) {
         }
 
         debugBtn.setOnClickListener {
-            if (debugPanel.visibility == View.VISIBLE) {
-                debugPanel.visibility = View.GONE
-            } else {
-                debugPanel.text = collectDebugInfo()
-                debugPanel.visibility = View.VISIBLE
-            }
+            // 3-stage toggle: off -> small -> full -> off.
+            debugStage = (debugStage + 1) % 3
+            sharedPreferences.edit { putInt("setting_debug_stage", debugStage) }
+            applyDebugStage()
         }
 
         if (Build.VERSION.SDK_INT >= 33) {
@@ -222,6 +234,24 @@ class SearchWindow(val context: Context) {
         }
     }
 
+    /** Applies the current debug stage: dot drawable + panel visibility/content. */
+    private fun applyDebugStage() {
+        debugDot.setBackgroundResource(
+            when (debugStage) {
+                1 -> R.drawable.debug_dot_small
+                2 -> R.drawable.debug_dot_full
+                else -> R.drawable.debug_dot_off
+            }
+        )
+        if (debugStage == 0) {
+            debugPanel.visibility = View.GONE
+        } else {
+            debugPanel.text = collectDebugInfo()
+            debugPanel.visibility = View.VISIBLE
+            debugPanel.scrollTo(0, 0)
+        }
+    }
+
     /** Small diagnostics snapshot for the debug panel. Kept lean on purpose. */
     private fun collectDebugInfo(): String {
         val version = try {
@@ -230,7 +260,13 @@ class SearchWindow(val context: Context) {
             "?"
         }
         val query = if (::searchInput.isInitialized) searchInput.text.toString() else "?"
-        val results = if (::resultsView.isInitialized) (resultsView.adapter?.itemCount ?: 0) else 0
+        val resultsAdapter = if (::resultsView.isInitialized) {
+            resultsView.adapter as? ResultScrollAdapter
+        } else {
+            null
+        }
+        val resultCount = resultsAdapter?.itemCount ?: 0
+        val breakdown = resultsAdapter?.resultPluginBreakdown()?.let { " ($it)" } ?: ""
         val plugins = sharedPreferences.getStringSet("setting_search_plugins", emptySet())
             .orEmpty().sorted().joinToString(",")
         val historyApps = try {
@@ -238,7 +274,31 @@ class SearchWindow(val context: Context) {
         } catch (_: Exception) {
             -1
         }
-        return "v$version q='$query' results=$results\nplugins=[$plugins]\nhistoryApps=$historyApps"
+        val base = "v$version q='$query' results=$resultCount$breakdown\n" +
+            "plugins=[$plugins]\nhistoryApps=$historyApps"
+        if (debugStage < 2) return base
+        return base + collectHistoryDetail()
+    }
+
+    /** Per-app launch counts for the full stage (capped, panel scrolls). */
+    private fun collectHistoryDetail(): String {
+        val history = try {
+            AppLaunchHistory(context.applicationContext).snapshot()
+        } catch (_: Exception) {
+            return ""
+        }
+        if (history.isEmpty()) return "\nno history yet"
+        val now = System.currentTimeMillis()
+        val lines = history.mapNotNull { (pkg, hits) ->
+            val day = hits.count { it >= now - AppUsageStats.DAY_MILLIS }
+            val twoDays = hits.count { it >= now - AppUsageStats.TOP_HIT_WINDOW_MILLIS }
+            if (twoDays == 0) null
+            else Triple(pkg.substringAfterLast('.'), day, twoDays)
+        }.sortedWith(compareByDescending<Triple<String, Int, Int>> { it.third }
+            .thenByDescending { it.second })
+            .take(6)
+        if (lines.isEmpty()) return "\nno history yet"
+        return "\n" + lines.joinToString("\n") { "  ${it.first}: 24h=${it.second} 48h=${it.third}" }
     }
 
     fun unload() {
