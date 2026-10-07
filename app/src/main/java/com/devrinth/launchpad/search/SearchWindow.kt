@@ -280,7 +280,7 @@ class SearchWindow(val context: Context) {
             -1
         }
         val base = "v$version q='$query' results=$resultCount$breakdown\n" +
-            "plugins=[$plugins]\nhistoryApps=$historyApps"
+            "plugins=[$plugins]\nhistoryApps=$historyApps (id: [24h, 48h])"
         if (debugStage < 2) return base
         return base + collectHistoryDetail()
     }
@@ -298,12 +298,12 @@ class SearchWindow(val context: Context) {
             val day = hits.count { it >= now - AppUsageStats.DAY_MILLIS }
             val twoDays = hits.count { it >= now - AppUsageStats.TOP_HIT_WINDOW_MILLIS }
             if (twoDays == 0) null
-            else Triple(pkg.substringAfterLast('.'), day, twoDays)
+            else Triple(pkg.removePrefix("com."), day, twoDays)
         }.sortedWith(compareByDescending<Triple<String, Int, Int>> { it.third }
             .thenByDescending { it.second })
             .take(6)
         if (lines.isEmpty()) return "\nno history yet"
-        return "\n" + lines.joinToString("\n") { "  ${it.first}: 24h=${it.second} 48h=${it.third}" }
+        return "\n" + lines.joinToString("\n") { "  ${it.first}: [${it.second}, ${it.third}]" }
     }
 
     fun unload() {
