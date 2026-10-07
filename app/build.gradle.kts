@@ -19,8 +19,8 @@ android {
         applicationId = "com.devrinth.launchpad"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1000
-        versionName = "1.3.0"
+        versionCode = 1001
+        versionName = "1.3.0-custom"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
