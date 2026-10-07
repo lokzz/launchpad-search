@@ -197,6 +197,13 @@ class SearchManager(
                     loadPlugin(plugin.key, isInternalPlugin)
                 }
             }
+            // Plugins init above; if the query is empty the top-hits request
+            // may have fired before AppsPlugin was ready (fresh overlay open).
+            // Re-request so recently-used apps show immediately instead of
+            // only appearing after the first typed query.
+            if (searchQuery.isEmpty()) {
+                (pluginsMap["apps"] as? AppsPlugin)?.pluginProcess("")
+            }
         }
 
         externalSearch.bindAvailablePlugins()
@@ -259,6 +266,7 @@ class SearchManager(
 
         if (searchQuery.isEmpty()) {
             resultRecyclerView.visibility = View.VISIBLE
+            searchSuggestionsView.visibility = View.GONE
             clearAllResults()
             clearAllSuggestions()
             // Empty query: only AppsPlugin responds, with top hits (apps
