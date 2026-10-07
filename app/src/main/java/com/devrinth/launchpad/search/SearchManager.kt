@@ -26,6 +26,8 @@ import com.devrinth.launchpad.search.external.ExternalSearch
 import com.devrinth.launchpad.search.plugins.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import androidx.core.view.isNotEmpty
@@ -80,6 +82,14 @@ class SearchManager(
 
     private val TAG : String = "PLUGIN MANAGER"
 
+    // Debounced fan-out: every keystroke narrows the visible list synchronously
+    // (local filter below), but plugins are only queried once typing pauses.
+    // Without this, fast typing piles overlapping async scans whose staggered
+    // insertions visibly flicker.
+    private val fanoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var fanoutJob: Job? = null
+    private val FANOUT_DEBOUNCE_MILLIS = 100L
+
     init {
         searchSuggestionsView.layoutManager = LinearLayoutManager(mContext, LinearLayoutManager.HORIZONTAL, false)
         resultRecyclerView.layoutManager = LinearLayoutManager(mContext)
@@ -110,6 +120,13 @@ class SearchManager(
         resultScrollAdapter = ResultScrollAdapter(resultArray, mContext)
         resultRecyclerView.adapter = resultScrollAdapter
 
+        // No insert/remove animations: with per-keystroke filtering plus
+        // staggered async plugin results, the default item animator turns
+        // every query change into a fade/slide cascade (visible flicker).
+        // Rows now swap instantly instead.
+        resultRecyclerView.itemAnimator = null
+        searchSuggestionsView.itemAnimator = null
+
         if (!sharedPreferences.getBoolean("setting_clear_search", true)) {
             searchTextBox.setText(sharedPreferences.getString("LAST_SEARCH_QUERY", ""))
             searchTextBox.setSelection(searchTextBox.text.length)
@@ -125,6 +142,8 @@ class SearchManager(
     }
 
     fun unloadPlugins() {
+        fanoutJob?.cancel()
+        fanoutJob = null
         enabledPlugins?.forEach {
             val plugin = pluginsMap[it]
             if (plugin != null) {
@@ -187,6 +206,7 @@ class SearchManager(
         }
     }
     fun reloadPlugins() {
+        fanoutJob?.cancel()
         actionSearchOpen = sharedPreferences.getBoolean("setting_top_result_default", true)
         enabledPlugins = sharedPreferences.getStringSet("setting_search_plugins", pluginsMap.keys)
 
@@ -303,10 +323,17 @@ class SearchManager(
             }
         }
 
-        externalSearch.sendQuery(searchQuery)
-
-        pluginList.forEach { mPlugin ->
-            mPlugin.pluginProcess(searchQuery)
+        // Debounced: cancel the previous keystroke's fan-out so only the
+        // settled query hits the plugins. The visible list was already narrowed
+        // synchronously above, so typing feels instant without the churn.
+        fanoutJob?.cancel()
+        val fannedQuery = searchQuery
+        fanoutJob = fanoutScope.launch {
+            kotlinx.coroutines.delay(FANOUT_DEBOUNCE_MILLIS)
+            externalSearch.sendQuery(fannedQuery)
+            pluginList.forEach { mPlugin ->
+                mPlugin.pluginProcess(fannedQuery)
+            }
         }
 
         previousQuery = searchQuery
