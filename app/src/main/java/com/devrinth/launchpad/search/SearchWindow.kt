@@ -200,7 +200,8 @@ class SearchWindow(val context: Context) {
             searchInput,
             resultsView,
             searchSuggestionsView,
-            searchCardLayout
+            searchCardLayout,
+            isAlternateLayout
         )
 
         initListeners()

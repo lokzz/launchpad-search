@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -16,6 +17,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devrinth.launchpad.BuildConfig
+import com.devrinth.launchpad.R
 import com.devrinth.launchpad.adapters.ResultAdapter
 import com.devrinth.launchpad.adapters.ResultScrollAdapter
 import com.devrinth.launchpad.adapters.SearchSuggestionListAdapter
@@ -33,7 +35,8 @@ class SearchManager(
     searchTextBox: EditText,
     private var resultRecyclerView: RecyclerView,
     private var searchSuggestionsView: RecyclerView,
-    searchCardLayout: LinearLayout
+    searchCardLayout: LinearLayout,
+    private val isAlternateLayout: Boolean = false,
 ) {
 
     private var searchQuery: String = ""
@@ -267,6 +270,7 @@ class SearchManager(
         if (searchQuery.isEmpty()) {
             resultRecyclerView.visibility = View.VISIBLE
             searchSuggestionsView.visibility = View.GONE
+            setResultsGap(true)
             clearAllResults()
             clearAllSuggestions()
             // Empty query: only AppsPlugin responds, with top hits (apps
@@ -276,6 +280,7 @@ class SearchManager(
             return
         } else {
             resultRecyclerView.visibility = View.VISIBLE
+            setResultsGap(false)
         }
 
         if (isTypingForward) {
@@ -305,6 +310,25 @@ class SearchManager(
         }
 
         previousQuery = searchQuery
+    }
+
+    /**
+     * Breathing room between the search bar and the results, but only when the
+     * query is empty (top hits, no recommendation chips). While searching the
+     * original tight overlap is restored.
+     */
+    private fun setResultsGap(empty: Boolean) {
+        val res = resultRecyclerView.context.resources
+        val gap = res.getDimensionPixelSize(R.dimen.search_results_top_gap)
+        val overlap = res.getDimensionPixelSize(R.dimen.search_results_overlap)
+        val params = resultRecyclerView.layoutParams as? ViewGroup.MarginLayoutParams
+            ?: return
+        if (isAlternateLayout) {
+            params.bottomMargin = if (empty) gap else 0
+        } else {
+            params.topMargin = if (empty) gap else overlap
+        }
+        resultRecyclerView.layoutParams = params
     }
 
     private fun clearAllResults() {

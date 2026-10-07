@@ -150,7 +150,7 @@
                     android:orientation="vertical"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/search_result_holder_height"
-                    android:layout_marginTop="@dimen/search_results_top_gap"
+                    android:layout_marginTop="@dimen/search_results_overlap"
                     android:requiresFadingEdge="vertical"
                     android:id="@+id/results_view">
 

@@ -38,7 +38,6 @@
                     android:layout_width="match_parent"
                     app:reverseLayout="true"
                     android:layout_height="@dimen/search_result_holder_height"
-                    android:layout_marginBottom="@dimen/search_results_top_gap"
                     android:id="@+id/results_view">
 
                 </androidx.recyclerview.widget.RecyclerView>
