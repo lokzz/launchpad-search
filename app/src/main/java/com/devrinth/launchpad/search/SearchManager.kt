@@ -90,6 +90,16 @@ class SearchManager(
     private var fanoutJob: Job? = null
     private val FANOUT_DEBOUNCE_MILLIS = 100L
 
+    /**
+     * Plugins whose matching is monotone under query shortening: any row shown
+     * for query Q still matches Q minus its last char (substring/fuzzy/prefix
+     * containment only grows when the query shrinks). Rows from these plugins
+     * are safe to keep on screen while a deletion refills, so there is never
+     * an empty flash. Everything else (calculator evals, websearch text,
+     * suggestion chips, similarity scores) is query-specific and dropped.
+     */
+    private val MONOTONE_PLUGINS = setOf("apps", "settings", "shortcuts")
+
     init {
         searchSuggestionsView.layoutManager = LinearLayoutManager(mContext, LinearLayoutManager.HORIZONTAL, false)
         resultRecyclerView.layoutManager = LinearLayoutManager(mContext)
@@ -303,11 +313,17 @@ class SearchManager(
             setResultsGap(false)
         }
 
+        val fanOutImmediate: Boolean
         if (isTypingForward) {
             filterExistingResultsForward()
+            fanOutImmediate = false
         } else {
-            clearAllResults()
+            // Deletion/shortening: kept rows still match (monotone matchers),
+            // so keep them on screen and refill immediately with no debounce.
+            // Clearing here is what caused the ~200ms empty flash.
+            dropNonMonotoneRows()
             clearAllSuggestions()
+            fanOutImmediate = true
         }
 
         if (firstQuery && searchQuery.isNotEmpty()) {
@@ -326,17 +342,42 @@ class SearchManager(
         // Debounced: cancel the previous keystroke's fan-out so only the
         // settled query hits the plugins. The visible list was already narrowed
         // synchronously above, so typing feels instant without the churn.
+        // Deletions skip the debounce and refill immediately.
         fanoutJob?.cancel()
-        val fannedQuery = searchQuery
-        fanoutJob = fanoutScope.launch {
-            kotlinx.coroutines.delay(FANOUT_DEBOUNCE_MILLIS)
-            externalSearch.sendQuery(fannedQuery)
-            pluginList.forEach { mPlugin ->
-                mPlugin.pluginProcess(fannedQuery)
+        if (fanOutImmediate) {
+            fanOutNow(searchQuery)
+        } else {
+            val fannedQuery = searchQuery
+            fanoutJob = fanoutScope.launch {
+                kotlinx.coroutines.delay(FANOUT_DEBOUNCE_MILLIS)
+                fanOutNow(fannedQuery)
             }
         }
 
         previousQuery = searchQuery
+    }
+
+    private fun fanOutNow(query: String) {
+        externalSearch.sendQuery(query)
+        pluginList.forEach { mPlugin ->
+            mPlugin.pluginProcess(query)
+        }
+    }
+
+    /**
+     * Drops rows from non-monotone plugins (query-specific content) while
+     * keeping rows that still match the shortened query. Single notification
+     * since item animations are disabled.
+     */
+    private fun dropNonMonotoneRows() {
+        if (resultArray.isEmpty()) return
+        val kept = resultArray.filter { it.sourcePlugin in MONOTONE_PLUGINS }
+        if (kept.size == resultArray.size) return
+        resultArray.clear()
+        resultArray.addAll(kept)
+        displayedResults.clear()
+        displayedResults.addAll(kept)
+        resultScrollAdapter.notifyDataSetChanged()
     }
 
     /**
