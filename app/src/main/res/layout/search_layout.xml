@@ -40,11 +40,26 @@
                 >
 
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
+
+                    <ImageButton
+                        android:layout_width="@dimen/search_action_button_geometry"
+                        android:layout_height="@dimen/search_action_button_geometry"
+                        android:layout_margin="@dimen/default_spacing"
+                        android:id="@+id/action_debug"
+                        android:visibility="gone"
+                        android:background="@android:color/transparent"
+                        android:src="@drawable/baseline_extension_24"
+                        android:contentDescription="@string/settings_debug_button"
+                        />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
 
                     <ImageButton
                         android:layout_width="@dimen/search_action_button_geometry"
@@ -67,6 +82,17 @@
 
                         />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/debug_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:paddingHorizontal="@dimen/search_bar_input_padding"
+                    android:paddingBottom="@dimen/default_spacing"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/result_extra_font"
+                    android:fontFamily="monospace" />
 
 
                 <androidx.cardview.widget.CardView

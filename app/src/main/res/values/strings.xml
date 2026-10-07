@@ -54,6 +54,9 @@
     <string name="settings_top_result_default">Submit opens top result</string>
     <string name="settings_top_result_default_summary">The top result will be the opened when pressing Enter or the \'Search button\' in your keyboard</string>
 
+    <string name="settings_debug_button">Debug Button</string>
+    <string name="settings_debug_button_summary">Show a small debug button in the search window</string>
+
     <string name="settings_layout_title">Layout</string>
 
     <string name="settings_layout_blur">Blur behind</string>

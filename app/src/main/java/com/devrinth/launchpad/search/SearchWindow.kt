@@ -16,6 +16,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.view.animation.PathInterpolatorCompat
 import androidx.preference.PreferenceManager
@@ -25,11 +26,14 @@ import com.devrinth.launchpad.activities.SettingsActivity
 import com.devrinth.launchpad.adapters.PinnedActionAdapter
 import com.devrinth.launchpad.adapters.PinnedActionListAdapter
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
+import com.devrinth.launchpad.search.plugins.AppLaunchHistory
 
 class SearchWindow(val context: Context) {
 
     private lateinit var closeBtn : ImageButton
     private lateinit var settingsBtn : ImageButton
+    private lateinit var debugBtn : ImageButton
+    private lateinit var debugPanel : TextView
 
     private lateinit var searchInput : EditText
     private lateinit var resultsView : RecyclerView
@@ -84,6 +88,12 @@ class SearchWindow(val context: Context) {
 
         closeBtn = contentView.findViewById(R.id.action_close)
         settingsBtn = contentView.findViewById(R.id.action_settings)
+        debugBtn = contentView.findViewById(R.id.action_debug)
+        debugPanel = contentView.findViewById(R.id.debug_panel)
+
+        if (sharedPreferences.getBoolean("setting_debug_button", false)) {
+            debugBtn.visibility = View.VISIBLE
+        }
 
     }
 
@@ -98,6 +108,15 @@ class SearchWindow(val context: Context) {
             context.startActivity(
                 Intent(context, SettingsActivity::class.java).addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("from_launchpad", true))
+        }
+
+        debugBtn.setOnClickListener {
+            if (debugPanel.visibility == View.VISIBLE) {
+                debugPanel.visibility = View.GONE
+            } else {
+                debugPanel.text = collectDebugInfo()
+                debugPanel.visibility = View.VISIBLE
+            }
         }
 
         if (Build.VERSION.SDK_INT >= 33) {
@@ -203,11 +222,28 @@ class SearchWindow(val context: Context) {
         }
     }
 
-    fun unload() {
-        mSearchManager.unloadPlugins()
+    /** Small diagnostics snapshot for the debug panel. Kept lean on purpose. */
+    private fun collectDebugInfo(): String {
+        val version = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (_: Exception) {
+            "?"
+        }
+        val query = if (::searchInput.isInitialized) searchInput.text.toString() else "?"
+        val results = if (::resultsView.isInitialized) (resultsView.adapter?.itemCount ?: 0) else 0
+        val plugins = sharedPreferences.getStringSet("setting_search_plugins", emptySet())
+            .orEmpty().sorted().joinToString(",")
+        val historyApps = try {
+            AppLaunchHistory(context.applicationContext).snapshot().size
+        } catch (_: Exception) {
+            -1
+        }
+        return "v$version q='$query' results=$results\nplugins=[$plugins]\nhistoryApps=$historyApps"
     }
 
-    fun reload() {
+    fun unload() {
+        mSearchManager.unloadPlugins()
+    }    fun reload() {
         mSearchManager.reloadPlugins()
     }
 
