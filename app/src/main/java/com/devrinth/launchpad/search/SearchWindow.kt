@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.os.Build
 import android.service.voice.VoiceInteractionSessionService
 import android.text.method.ScrollingMovementMethod
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.Window
@@ -126,9 +127,13 @@ class SearchWindow(val context: Context) {
 
         debugBtn.setOnClickListener {
             // 3-stage toggle: off -> small -> full -> off.
-            debugStage = (debugStage + 1) % 3
-            sharedPreferences.edit { putInt("setting_debug_stage", debugStage) }
-            applyDebugStage()
+            try {
+                debugStage = (debugStage + 1) % 3
+                sharedPreferences.edit { putInt("setting_debug_stage", debugStage) }
+                applyDebugStage()
+            } catch (e: Exception) {
+                Log.e("DebugButton", "debug tap failed", e)
+            }
         }
 
         if (Build.VERSION.SDK_INT >= 33) {
