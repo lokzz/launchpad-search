@@ -31,21 +31,39 @@ jobs:
       - name: Bump versionCode
         id: bump
         run: |
-          python3 - <<'EOF'
-          import pathlib
+          MSG="$(git log -1 --format=%B HEAD)"
+          LAST="$(echo "$MSG" | tail -n 1 | sed -e 's/[[:space:]]*$//')"
+          OVERRIDE=""
+          case "$LAST" in
+            versionCode=*)
+              CANDIDATE="${LAST#versionCode=}"
+              if [[ "$CANDIDATE" =~ ^[0-9]+$ ]]; then OVERRIDE="$CANDIDATE"; fi
+              ;;
+          esac
+          python3 - "$OVERRIDE" <<'EOF'
+          import pathlib, sys
           p = pathlib.Path('app/version.properties')
           v = 1001
           if p.exists():
               for line in p.read_text().splitlines():
                   if line.startswith('VERSION_CODE='):
                       v = int(line.split('=', 1)[1].strip())
-          v += 1
+          override = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else None
+          if override is not None:
+              n = int(override)
+              if n <= v:
+                  sys.exit(f'ERROR: versionCode={n} from commit message is not greater than current {v}; refusing to avoid a downgrade/overlap.')
+              v = n
+              reason = 'commit override'
+          else:
+              v += 1
+              reason = 'auto-bump'
           lines = []
           if p.exists():
               lines = [l for l in p.read_text().splitlines() if not l.startswith('VERSION_CODE=')]
           lines.append(f'VERSION_CODE={v}')
           p.write_text('\n'.join(lines) + '\n')
-          print(f'versionCode={v}')
+          print(f'versionCode={v} ({reason})')
           EOF
           echo "code=$(grep '^VERSION_CODE=' app/version.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
