@@ -159,6 +159,20 @@ class CalculatorSyntaxTest {
     }
 
     @Test
+    fun formatResultAvoidsScientificNotation() {
+        assertEquals("30000000", CalculatorSyntax.formatResult(3.0e7))
+        assertEquals("5000000.0", CalculatorSyntax.formatResult(5000000.0))
+        assertEquals("0.0001", CalculatorSyntax.formatResult(1e-4))
+        assertEquals("0.00000015", CalculatorSyntax.formatResult(1.5e-7))
+        assertEquals("-30000000", CalculatorSyntax.formatResult(-3.0e7))
+        // Non-scientific rendering passes through untouched.
+        assertEquals("0.30000000000000004", CalculatorSyntax.formatResult(0.1 + 0.2))
+        assertEquals("8.0", CalculatorSyntax.formatResult(8.0))
+        // Non-finite values keep their names.
+        assertEquals("Infinity", CalculatorSyntax.formatResult(Double.POSITIVE_INFINITY))
+    }
+
+    @Test
     fun displayExpandDecompressesToFullNumbers() {
         assertEquals("1000000 * 2", CalculatorSyntax.displayExpand("1mil * 2"))
         assertEquals("1000000", CalculatorSyntax.displayExpand("1e6"))

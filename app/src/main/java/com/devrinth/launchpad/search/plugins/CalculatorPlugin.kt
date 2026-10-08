@@ -80,6 +80,24 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
         }
 
         /**
+         * Plain decimal rendering of a result. [Double.toString] flips to
+         * scientific form past ten million (`1e7 * 3` came out as `3.0E7`),
+         * so de-scientize through BigDecimal -- but only then, so values
+         * like `0.30000000000000004` keep their exact current rendering
+         * instead of exposing full binary-expansion digits.
+         */
+        fun formatResult(value: Double): String {
+            if (!value.isFinite()) return value.toString()
+            val s = value.toString()
+            if (!s.contains('E') && !s.contains('e')) return s
+            return try {
+                java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
+            } catch (_: Exception) {
+                s
+            }
+        }
+
+        /**
          * Bare `e` needs an explicit `*` when it directly follows a number or
          * closing paren (`2e` -> `2*(E)`); otherwise the digits would fuse
          * (`22.718...`). Anywhere else it stands alone.
@@ -97,28 +115,19 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
         try {
             val normalized = CalculatorSyntax.normalize(query)
             val icon = AppCompatResources.getDrawable(mContext, R.drawable.baseline_calculate_24)
+            // Single row: the answer with the decompressed numbers as subtitle.
+            // (A mechanical "here is your query rewritten" alt row used to sit
+            // here too -- removed as noise. The `expanded` flag stays as tested
+            // rewrite detection, not as UI.)
             val rows = arrayListOf(
                 ResultAdapter(
-                    Keval.eval(normalized.expression).toString(),
+                    CalculatorSyntax.formatResult(Keval.eval(normalized.expression)),
                     CalculatorSyntax.displayExpand(query),
                     icon,
                     null,
                     null
                 )
             )
-            // Alt row shows the expanded parse, e.g. `1mil * 2` also lists
-            // `(1*1000000) * 2` so the rewrite is visible.
-            if (normalized.expanded) {
-                rows.add(
-                    ResultAdapter(
-                        normalized.expression,
-                        query,
-                        icon,
-                        null,
-                        null
-                    )
-                )
-            }
             pluginResult(rows, query)
         } catch (e: Exception) {
             pluginResult(emptyList(), "")
