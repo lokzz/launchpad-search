@@ -26,8 +26,6 @@ import com.devrinth.launchpad.search.external.ExternalSearch
 import com.devrinth.launchpad.search.plugins.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import androidx.core.content.edit
 import androidx.core.view.isNotEmpty
@@ -39,6 +37,7 @@ class SearchManager(
     private var searchSuggestionsView: RecyclerView,
     searchCardLayout: LinearLayout,
     private val isAlternateLayout: Boolean = false,
+    private val onResultsChanged: (() -> Unit)? = null,
 ) {
 
     private var searchQuery: String = ""
@@ -81,14 +80,6 @@ class SearchManager(
     private var firstQuery: Boolean = true
 
     private val TAG : String = "PLUGIN MANAGER"
-
-    // Debounced fan-out: every keystroke narrows the visible list synchronously
-    // (local filter below), but plugins are only queried once typing pauses.
-    // Without this, fast typing piles overlapping async scans whose staggered
-    // insertions visibly flicker.
-    private val fanoutScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var fanoutJob: Job? = null
-    private val FANOUT_DEBOUNCE_MILLIS = 100L
 
     /**
      * Plugins whose matching is monotone under query shortening: any row shown
@@ -152,8 +143,6 @@ class SearchManager(
     }
 
     fun unloadPlugins() {
-        fanoutJob?.cancel()
-        fanoutJob = null
         enabledPlugins?.forEach {
             val plugin = pluginsMap[it]
             if (plugin != null) {
@@ -216,7 +205,6 @@ class SearchManager(
         }
     }
     fun reloadPlugins() {
-        fanoutJob?.cancel()
         actionSearchOpen = sharedPreferences.getBoolean("setting_top_result_default", true)
         enabledPlugins = sharedPreferences.getStringSet("setting_search_plugins", pluginsMap.keys)
 
@@ -280,6 +268,14 @@ class SearchManager(
             resultArray.addAll(newResults)
             displayedResults.addAll(newResults)
             resultScrollAdapter.notifyItemRangeInserted(startIndex, newResults.size)
+            notifyResultsChanged()
+        }
+    }
+
+    private fun notifyResultsChanged() {
+        try {
+            onResultsChanged?.invoke()
+        } catch (_: Exception) {
         }
     }
 
@@ -313,17 +309,14 @@ class SearchManager(
             setResultsGap(false)
         }
 
-        val fanOutImmediate: Boolean
         if (isTypingForward) {
             filterExistingResultsForward()
-            fanOutImmediate = false
         } else {
             // Deletion/shortening: kept rows still match (monotone matchers),
-            // so keep them on screen and refill immediately with no debounce.
-            // Clearing here is what caused the ~200ms empty flash.
+            // so keep them on screen while only query-specific rows drop.
+            // Clearing everything here caused an empty flash.
             dropNonMonotoneRows()
             clearAllSuggestions()
-            fanOutImmediate = true
         }
 
         if (firstQuery && searchQuery.isNotEmpty()) {
@@ -339,20 +332,11 @@ class SearchManager(
             }
         }
 
-        // Debounced: cancel the previous keystroke's fan-out so only the
-        // settled query hits the plugins. The visible list was already narrowed
-        // synchronously above, so typing feels instant without the churn.
-        // Deletions skip the debounce and refill immediately.
-        fanoutJob?.cancel()
-        if (fanOutImmediate) {
-            fanOutNow(searchQuery)
-        } else {
-            val fannedQuery = searchQuery
-            fanoutJob = fanoutScope.launch {
-                kotlinx.coroutines.delay(FANOUT_DEBOUNCE_MILLIS)
-                fanOutNow(fannedQuery)
-            }
-        }
+        // Fan out immediately: with item animations off and stale-query
+        // results guarded in addResults, there is no flicker left to debounce
+        // against — delaying only creates an empty hole. The visible list was
+        // already narrowed synchronously above.
+        fanOutNow(searchQuery)
 
         previousQuery = searchQuery
     }
@@ -378,6 +362,7 @@ class SearchManager(
         displayedResults.clear()
         displayedResults.addAll(kept)
         resultScrollAdapter.notifyDataSetChanged()
+        notifyResultsChanged()
     }
 
     /**
@@ -406,6 +391,7 @@ class SearchManager(
             resultArray.clear()
             displayedResults.clear()
             resultScrollAdapter.notifyItemRangeRemoved(0, count)
+            notifyResultsChanged()
         }
     }
 
@@ -423,6 +409,7 @@ class SearchManager(
         val iterator = resultArray.iterator()
 
         var index = 0
+        var removed = false
         while (iterator.hasNext()) {
             val result = iterator.next()
 
@@ -431,10 +418,12 @@ class SearchManager(
                 iterator.remove()
                 displayedResults.remove(result)
                 resultScrollAdapter.notifyItemRemoved(index)
+                removed = true
             } else {
                 index++
             }
         }
+        if (removed) notifyResultsChanged()
     }
 
     private fun filterExistingSuggestionsForward() {

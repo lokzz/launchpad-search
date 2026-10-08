@@ -104,11 +104,8 @@ class AppsPlugin(mContext: Context) : SearchPlugin(mContext) {
             }
             return
         }
-        if (query.length < 2) {
-            searchJob?.cancel()
-            pluginResult(emptyList(), "")
-            return
-        }
+        // Single-char queries search too: the cache makes a full scan cheap,
+        // so the first keystroke already shows matches instead of nothing.
         // Cancel the previous keystroke's search so rapid typing can't pile up
         // full-list scans (the old isProcessing flag never actually guarded).
         searchJob?.cancel()

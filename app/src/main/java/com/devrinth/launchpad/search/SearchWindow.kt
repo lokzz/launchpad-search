@@ -202,7 +202,7 @@ class SearchWindow(val context: Context) {
             searchSuggestionsView,
             searchCardLayout,
             isAlternateLayout
-        )
+        ) { refreshDebugPanel() }
 
         initListeners()
 
@@ -238,6 +238,17 @@ class SearchWindow(val context: Context) {
         }
     }
 
+    /** Re-renders the panel if a stage is active. Called on tap, on window
+     * show (the window outlives opens, so open-time text would go stale),
+     * and whenever the result list changes. */
+    private fun refreshDebugPanel() {
+        if (debugStage == 0 || !::debugPanel.isInitialized) return
+        try {
+            debugPanel.text = collectDebugInfo()
+        } catch (e: Exception) {
+            Log.e("DebugButton", "debug refresh failed", e)
+        }
+    }
     /** Applies the current debug stage: icon tint + panel visibility/content. */
     private fun applyDebugStage() {
         // No dot: the icon tint itself is the state. Default grey = off,
@@ -252,9 +263,9 @@ class SearchWindow(val context: Context) {
         if (debugStage == 0) {
             debugPanel.visibility = View.GONE
         } else {
-            debugPanel.text = collectDebugInfo()
             debugPanel.visibility = View.VISIBLE
             debugPanel.scrollTo(0, 0)
+            refreshDebugPanel()
         }
     }
 
@@ -317,7 +328,9 @@ class SearchWindow(val context: Context) {
     fun showWindow() {
         if (!mContentView.isShown)
             mContentView.startAnimation(anim)
-
+        // The window object outlives opens; refresh stale panel text.
+        // Result arrivals refresh it again via the SearchManager callback.
+        refreshDebugPanel()
     }
     fun hideWindow() {
         mContentView.startAnimation(animOut)
