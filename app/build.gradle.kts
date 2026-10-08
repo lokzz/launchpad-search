@@ -1,4 +1,16 @@
+import java.io.File
 import java.util.Properties
+
+/**
+ * versionCode source of truth: app/version.properties (bumped by CI, never by
+ * hand). Falls back to 1001 if the file is missing or unparsable.
+ */
+fun loadVersionCode(versionFile: File): Int {
+    if (!versionFile.exists()) return 1001
+    val props = Properties()
+    versionFile.inputStream().use { props.load(it) }
+    return props.getProperty("VERSION_CODE")?.toIntOrNull() ?: 1001
+}
 
 plugins {
     id("com.android.application")
@@ -19,7 +31,9 @@ android {
         applicationId = "com.devrinth.launchpad"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1001
+        // versionCode lives in app/version.properties and is bumped by CI
+        // (see .github/workflows/android.yml) — never by hand.
+        versionCode = loadVersionCode(file("version.properties"))
         versionName = "1.3.0-custom"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
