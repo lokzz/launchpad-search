@@ -31,9 +31,11 @@ android {
         applicationId = "com.devrinth.launchpad"
         minSdk = 26
         targetSdk = 35
-        // versionCode lives in app/version.properties and is bumped by CI
-        // (see .github/workflows/android.yml) — never by hand.
-        versionCode = loadVersionCode(file("version.properties"))
+        // versionCode comes from -PversionCodeOverride=N (CI pins it from the
+        // commit trailer) or falls back to app/version.properties for local
+        // IDE syncs. CI refuses to build without a trailer (except merges).
+        versionCode = (project.findProperty("versionCodeOverride") as String?)?.toIntOrNull()
+            ?: loadVersionCode(file("version.properties"))
         versionName = "1.3.0-custom"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

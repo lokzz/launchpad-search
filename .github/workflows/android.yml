@@ -1,85 +1,48 @@
 name: Android CI
 
-# Push-only on purpose: the bump commit below is pushed with [skip ci], so it
-# never retriggers. Push-event runs attach their checks to open PRs, so no
-# separate pull_request trigger is needed (and it would double-bump).
+# Push-only: push-event runs attach their checks to open PRs, so no separate
+# pull_request trigger is needed.
 on:
   push:
-    branches: [dev, main, custom]
-
-# Serialize runs per branch: the versionCode bump is read-modify-write, so
-# overlapping runs could grab the same code.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+    branches: [dev, main, "feat/**", "fix/**"]
 
 jobs:
-  # Bump app/version.properties (+1, committed back with [skip ci]) so every
-  # built version gets the next sequential versionCode. Downstream jobs build
-  # the bump commit, never the trigger commit.
-  prepare:
+  build:
     runs-on: ubuntu-latest
-    # Needed: this job pushes the versionCode bump commit back.
-    permissions:
-      contents: write
-    outputs:
-      sha: ${{ steps.bump.outputs.sha }}
-      code: ${{ steps.bump.outputs.code }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: Bump versionCode
-        id: bump
+      # Every built commit pins its own versionCode via a trailer on the last
+      # commit-message line: versionCode=N (digits only, must exceed the
+      # current app/version.properties value). No trailer, no build -- except
+      # merge commits, which rebuild an already-versioned tree as-is.
+      - name: Resolve versionCode
+        id: version
         run: |
-          MSG="$(git log -1 --format=%B HEAD)"
-          LAST="$(echo "$MSG" | tail -n 1 | sed -e 's/[[:space:]]*$//')"
-          OVERRIDE=""
-          case "$LAST" in
-            versionCode=*)
-              CANDIDATE="${LAST#versionCode=}"
-              if [[ "$CANDIDATE" =~ ^[0-9]+$ ]]; then OVERRIDE="$CANDIDATE"; fi
+          SUBJECT="$(git log -1 --format=%s HEAD)"
+          LAST="$(git log -1 --format=%B HEAD | tail -n 1 | sed -e 's/[[:space:]]*$//')"
+          FILE="$(grep '^VERSION_CODE=' app/version.properties | cut -d= -f2)"
+          CODE=""
+          case "$SUBJECT" in
+            Merge\ *) echo "merge commit; reusing file versionCode=$FILE" ;;
+            *)
+              case "$LAST" in
+                versionCode=*)
+                  CANDIDATE="${LAST#versionCode=}"
+                  if [[ "$CANDIDATE" =~ ^[0-9]+$ ]]; then CODE="$CANDIDATE"; fi
+                  ;;
+              esac
+              if [ -z "$CODE" ]; then
+                echo "ERROR: no versionCode=N trailer on the last commit-message line. End your commit with e.g. versionCode=$((FILE + 1))."
+                exit 1
+              fi
+              if [ "$CODE" -le "$FILE" ]; then
+                echo "ERROR: versionCode=$CODE is not greater than current $FILE; refusing to avoid a downgrade/overlap."
+                exit 1
+              fi
               ;;
           esac
-          python3 - "$OVERRIDE" <<'EOF'
-          import pathlib, sys
-          p = pathlib.Path('app/version.properties')
-          v = 1001
-          if p.exists():
-              for line in p.read_text().splitlines():
-                  if line.startswith('VERSION_CODE='):
-                      v = int(line.split('=', 1)[1].strip())
-          override = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else None
-          if override is not None:
-              n = int(override)
-              if n <= v:
-                  sys.exit(f'ERROR: versionCode={n} from commit message is not greater than current {v}; refusing to avoid a downgrade/overlap.')
-              v = n
-              reason = 'commit override'
-          else:
-              v += 1
-              reason = 'auto-bump'
-          lines = []
-          if p.exists():
-              lines = [l for l in p.read_text().splitlines() if not l.startswith('VERSION_CODE=')]
-          lines.append(f'VERSION_CODE={v}')
-          p.write_text('\n'.join(lines) + '\n')
-          print(f'versionCode={v} ({reason})')
-          EOF
-          echo "code=$(grep '^VERSION_CODE=' app/version.properties | cut -d= -f2)" >> "$GITHUB_OUTPUT"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/version.properties
-          git commit -m "[skip ci] bump versionCode to $(grep '^VERSION_CODE=' app/version.properties | cut -d= -f2)"
-          git push origin "HEAD:${{ github.ref_name }}"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-  unit-test:
-    runs-on: ubuntu-latest
-    needs: prepare
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
+          echo "code=${CODE:-$FILE}" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -104,29 +67,9 @@ jobs:
           name: unit-test-reports
           path: app/build/reports/tests/
 
-  assemble-debug:
-    runs-on: ubuntu-latest
-    needs: [prepare, unit-test]
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.prepare.outputs.sha }}
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Ensure Android API 35 packages
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
       # Debug APK only -- uses the pinned debug keystore, no signing cert needed.
       - name: Assemble debug APK
-        run: chmod +x gradlew && ./gradlew :app:assembleDebug --stacktrace
+        run: chmod +x gradlew && ./gradlew :app:assembleDebug "-PversionCodeOverride=${{ steps.version.outputs.code }}" --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
