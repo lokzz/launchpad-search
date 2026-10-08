@@ -28,7 +28,8 @@ jobs:
           ).stdout
           lines = msg.splitlines()
           subject = lines[0] if lines else ''
-          last = lines[-1].strip() if lines else ''
+          # Last non-empty line: multi-m commits can leave trailing blanks.
+          last = next((l.strip() for l in reversed(lines) if l.strip()), '')
           print(f'subject={subject!r}')
           print(f'last line={last!r}')
           props = {}
