@@ -19,30 +19,47 @@ jobs:
       - name: Resolve versionCode
         id: version
         run: |
-          SUBJECT="$(git log -1 --format=%s HEAD)"
-          LAST="$(git log -1 --format=%B HEAD | tail -n 1 | sed -e 's/[[:space:]]*$//')"
-          FILE="$(grep '^VERSION_CODE=' app/version.properties | cut -d= -f2)"
-          CODE=""
-          case "$SUBJECT" in
-            Merge\ *) echo "merge commit; reusing file versionCode=$FILE" ;;
-            *)
-              case "$LAST" in
-                versionCode=*)
-                  CANDIDATE="${LAST#versionCode=}"
-                  if [[ "$CANDIDATE" =~ ^[0-9]+$ ]]; then CODE="$CANDIDATE"; fi
-                  ;;
-              esac
-              if [ -z "$CODE" ]; then
-                echo "ERROR: no versionCode=N trailer on the last commit-message line. End your commit with e.g. versionCode=$((FILE + 1))."
-                exit 1
-              fi
-              if [ "$CODE" -le "$FILE" ]; then
-                echo "ERROR: versionCode=$CODE is not greater than current $FILE; refusing to avoid a downgrade/overlap."
-                exit 1
-              fi
-              ;;
-          esac
-          echo "code=${CODE:-$FILE}" >> "$GITHUB_OUTPUT"
+          python3 - <<'EOF'
+          import os
+          import re, subprocess, sys
+          msg = subprocess.run(
+              ['git', 'log', '-1', '--format=%B', 'HEAD'],
+              capture_output=True, text=True, check=True,
+          ).stdout
+          lines = msg.splitlines()
+          subject = lines[0] if lines else ''
+          last = lines[-1].strip() if lines else ''
+          print(f'subject={subject!r}')
+          print(f'last line={last!r}')
+          props = {}
+          with open('app/version.properties') as f:
+              for line in f:
+                  if line.startswith('VERSION_CODE='):
+                      props['file'] = int(line.split('=', 1)[1].strip())
+          file_code = props.get('file', 1001)
+          print(f'file versionCode={file_code}')
+          code = None
+          if subject.startswith('Merge '):
+              print(f'merge commit; reusing file versionCode={file_code}')
+          else:
+              m = re.fullmatch(r'versionCode=(\d+)', last)
+              if m is None:
+                  sys.exit(
+                      'ERROR: no versionCode=N trailer on the last commit-message '
+                      f'line (got {last!r}). End your commit with e.g. '
+                      f'versionCode={file_code + 1}.'
+                  )
+              code = int(m.group(1))
+              if code <= file_code:
+                  sys.exit(
+                      f'ERROR: versionCode={code} is not greater than current '
+                      f'{file_code}; refusing to avoid a downgrade/overlap.'
+                  )
+          final = code if code is not None else file_code
+          print(f'building with versionCode={final}')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'code={final}\n')
+          EOF
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
