@@ -7,6 +7,9 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.os.Build
 import android.service.voice.VoiceInteractionSessionService
+import android.text.method.ScrollingMovementMethod
+import android.util.Log
+import android.graphics.PorterDuff
 import android.view.LayoutInflater
 import android.view.View
 import android.view.Window
@@ -16,7 +19,10 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.view.animation.PathInterpolatorCompat
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
@@ -24,12 +30,20 @@ import com.devrinth.launchpad.R
 import com.devrinth.launchpad.activities.SettingsActivity
 import com.devrinth.launchpad.adapters.PinnedActionAdapter
 import com.devrinth.launchpad.adapters.PinnedActionListAdapter
+import com.devrinth.launchpad.adapters.ResultScrollAdapter
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
+import com.devrinth.launchpad.search.plugins.AppLaunchHistory
+import com.devrinth.launchpad.search.plugins.AppUsageStats
 
 class SearchWindow(val context: Context) {
 
     private lateinit var closeBtn : ImageButton
     private lateinit var settingsBtn : ImageButton
+    private lateinit var debugBtn : ImageButton
+    private lateinit var debugPanel : TextView
+
+    /** Debug button stage: 0 off (hollow dot) -> 1 small (yellow) -> 2 full (green). */
+    private var debugStage: Int = 0
 
     private lateinit var searchInput : EditText
     private lateinit var resultsView : RecyclerView
@@ -84,6 +98,15 @@ class SearchWindow(val context: Context) {
 
         closeBtn = contentView.findViewById(R.id.action_close)
         settingsBtn = contentView.findViewById(R.id.action_settings)
+        debugBtn = contentView.findViewById(R.id.action_debug)
+        debugPanel = contentView.findViewById(R.id.debug_panel)
+        debugPanel.movementMethod = ScrollingMovementMethod.getInstance()
+
+        if (sharedPreferences.getBoolean("setting_debug_button", false)) {
+            debugBtn.visibility = View.VISIBLE
+            debugStage = sharedPreferences.getInt("setting_debug_stage", 0).coerceIn(0, 2)
+            applyDebugStage()
+        }
 
     }
 
@@ -98,6 +121,17 @@ class SearchWindow(val context: Context) {
             context.startActivity(
                 Intent(context, SettingsActivity::class.java).addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("from_launchpad", true))
+        }
+
+        debugBtn.setOnClickListener {
+            // 3-stage toggle: off -> small -> full -> off.
+            try {
+                debugStage = (debugStage + 1) % 3
+                sharedPreferences.edit { putInt("setting_debug_stage", debugStage) }
+                applyDebugStage()
+            } catch (e: Exception) {
+                Log.e("DebugButton", "debug tap failed", e)
+            }
         }
 
         if (Build.VERSION.SDK_INT >= 33) {
@@ -166,8 +200,9 @@ class SearchWindow(val context: Context) {
             searchInput,
             resultsView,
             searchSuggestionsView,
-            searchCardLayout
-        )
+            searchCardLayout,
+            isAlternateLayout
+        ) { refreshDebugPanel() }
 
         initListeners()
 
@@ -203,15 +238,99 @@ class SearchWindow(val context: Context) {
         }
     }
 
+    /** Re-renders the panel if a stage is active. Called on tap, on window
+     * show (the window outlives opens, so open-time text would go stale),
+     * and whenever the result list changes. */
+    private fun refreshDebugPanel() {
+        if (debugStage == 0 || !::debugPanel.isInitialized) return
+        try {
+            debugPanel.text = collectDebugInfo()
+        } catch (e: Exception) {
+            Log.e("DebugButton", "debug refresh failed", e)
+        }
+    }
+    /** Applies the current debug stage: icon tint + panel visibility/content. */
+    private fun applyDebugStage() {
+        // No dot: the icon tint itself is the state. Default grey = off,
+        // yellow = small panel, green = full panel.
+        when (debugStage) {
+            1 -> debugBtn.setColorFilter(
+                ContextCompat.getColor(context, R.color.debug_small), PorterDuff.Mode.SRC_IN)
+            2 -> debugBtn.setColorFilter(
+                ContextCompat.getColor(context, R.color.debug_full), PorterDuff.Mode.SRC_IN)
+            else -> debugBtn.clearColorFilter()
+        }
+        if (debugStage == 0) {
+            debugPanel.visibility = View.GONE
+        } else {
+            debugPanel.visibility = View.VISIBLE
+            debugPanel.scrollTo(0, 0)
+            refreshDebugPanel()
+        }
+    }
+
+    /** Small diagnostics snapshot for the debug panel. Kept lean on purpose. */
+    private fun collectDebugInfo(): String {
+        val version = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (_: Exception) {
+            "?"
+        }
+        val query = if (::searchInput.isInitialized) searchInput.text.toString() else "?"
+        val resultsAdapter = if (::resultsView.isInitialized) {
+            resultsView.adapter as? ResultScrollAdapter
+        } else {
+            null
+        }
+        val resultCount = resultsAdapter?.itemCount ?: 0
+        val breakdown = resultsAdapter?.resultPluginBreakdown()?.let { " ($it)" } ?: ""
+        val plugins = sharedPreferences.getStringSet("setting_search_plugins", emptySet())
+            .orEmpty().sorted().joinToString(",")
+        val historyApps = try {
+            AppLaunchHistory(context.applicationContext).snapshot().size
+        } catch (_: Exception) {
+            -1
+        }
+        val base = "v$version q='$query' results=$resultCount$breakdown\n" +
+            "plugins=[$plugins]\nhistoryApps=$historyApps (id: [24h, 48h])"
+        if (debugStage < 2) return base
+        return base + collectHistoryDetail()
+    }
+
+    /** Per-app launch counts for the full stage (capped, panel scrolls). */
+    private fun collectHistoryDetail(): String {
+        val history = try {
+            AppLaunchHistory(context.applicationContext).snapshot()
+        } catch (_: Exception) {
+            return ""
+        }
+        if (history.isEmpty()) return "\nno history yet"
+        val now = System.currentTimeMillis()
+        val lines = history.mapNotNull { (pkg, hits) ->
+            val day = hits.count { it >= now - AppUsageStats.DAY_MILLIS }
+            val twoDays = hits.count { it >= now - AppUsageStats.TOP_HIT_WINDOW_MILLIS }
+            if (twoDays == 0) null
+            else Triple(pkg.removePrefix("com."), day, twoDays)
+        }.sortedWith(compareByDescending<Triple<String, Int, Int>> { it.third }
+            .thenByDescending { it.second })
+            .take(6)
+        if (lines.isEmpty()) return "\nno history yet"
+        return "\n" + lines.joinToString("\n") { "  ${it.first}: [${it.second}, ${it.third}]" }
+    }
+
     fun unload() {
         mSearchManager.unloadPlugins()
+    }    fun reload() {
+        mSearchManager.reloadPlugins()
     }
 
     // -- WINDOW FUNCTION
     fun showWindow() {
         if (!mContentView.isShown)
             mContentView.startAnimation(anim)
-
+        // The window object outlives opens; refresh stale panel text.
+        // Result arrivals refresh it again via the SearchManager callback.
+        refreshDebugPanel()
     }
     fun hideWindow() {
         mContentView.startAnimation(animOut)

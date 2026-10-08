@@ -1,13 +1,21 @@
+! note: this fork was made by AI; only uploaded here just to get Github Actions working.
+
 
 # Launchpad Search - Shortcuts
 <br>
 <p align="center">
     <img src="images/icon.png" alt="Launchpad Icon" width="96" height="96"><br>
-    <i>v1.3.0</i><br>
+    <i>v1.3.0-custom</i><br>
     A spotlight search alternative for android, but better<br><br>
     <a href="https://github.com/jaxparrow07/launchpad-search/releases/latest">
         <img src="https://img.shields.io/github/downloads/jaxparrow07/launchpad-search/latest/total?style=for-the-badge" alt="Download Latest Release">
     </a>      
+    <a href="https://apt.izzysoft.de/packages/com.devrinth.launchpad">
+      <img src="https://img.shields.io/endpoint?url=https://apt.izzysoft.de/fdroid/api/v1/shield/com.devrinth.launchpad&style=for-the-badge" alt="Get it at IzzyOnDroid">
+    </a>
+    <a href="https://shields.rbtlog.dev/com.devrinth.launchpad">
+      <img src="https://shields.rbtlog.dev/simple/com.devrinth.launchpad?style=for-the-badge" alt="RB shield">
+    </a>
     <a href="https://ko-fi.com/devrinth">
         <img src="https://img.shields.io/badge/Buy_me_a_Kofi-donate-blue?style=for-the-badge&logo=kofi&color=%23FF6433" >
     </a>

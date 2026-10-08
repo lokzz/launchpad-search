@@ -1,4 +1,16 @@
+import java.io.File
 import java.util.Properties
+
+/**
+ * versionCode source of truth: app/version.properties (bumped by CI, never by
+ * hand). Falls back to 1001 if the file is missing or unparsable.
+ */
+fun loadVersionCode(versionFile: File): Int {
+    if (!versionFile.exists()) return 1001
+    val props = Properties()
+    versionFile.inputStream().use { props.load(it) }
+    return props.getProperty("VERSION_CODE")?.toIntOrNull() ?: 1001
+}
 
 plugins {
     id("com.android.application")
@@ -19,10 +31,27 @@ android {
         applicationId = "com.devrinth.launchpad"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1000
-        versionName = "1.3.0"
+        // versionCode lives in app/version.properties and is bumped by CI
+        // (see .github/workflows/android.yml) — never by hand.
+        versionCode = loadVersionCode(file("version.properties"))
+        versionName = "1.3.0-custom"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Pinned debug keystore (app/debug.keystore, standard android/android
+    // credentials) so every CI/local debug build shares one signature and
+    // installs as an update instead of demanding an uninstall. Debug only --
+    // release signing is untouched.
+    signingConfigs {
+        // AGP already creates a "debug" config -- just repoint it at the
+        // pinned keystore instead of creating a second one.
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -33,6 +62,11 @@ android {
                 "proguard-rules.pro"
             )
         }
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

@@ -11,12 +11,15 @@ import com.devrinth.launchpad.R
 import com.devrinth.launchpad.adapters.ResultAdapter
 import com.devrinth.launchpad.search.SearchPlugin
 import com.devrinth.launchpad.utils.IntentUtils
+import com.devrinth.launchpad.utils.StringUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ShortcutsPlugin(mContext: Context) : SearchPlugin(mContext) {
+
+    override var ID = "shortcuts"
 
     private lateinit var mPackageManager: PackageManager
     private lateinit var mLauncherApps: LauncherApps
@@ -56,7 +59,7 @@ class ShortcutsPlugin(mContext: Context) : SearchPlugin(mContext) {
                         mPackageManager.getApplicationInfo(ri.activityInfo.packageName, 0)
                     ).toString()
 
-                    if (label.contains(query, true) || appLabel.contains(query, true)) {
+                    if ( StringUtils.anyFuzzyContains(query, arrayListOf(label, appLabel))) {
                         results.add(
                             ResultAdapter(
                                 label,

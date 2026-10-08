@@ -22,7 +22,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="top"
-        android:paddingTop="@dimen/parent_layout_padding_top"
+        android:paddingTop="@dimen/search_popup_top_margin"
         android:paddingBottom="@dimen/parent_layout_padding_top">
 
         <androidx.cardview.widget.CardView
@@ -40,11 +40,26 @@
                 >
 
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
+
+                    <ImageButton
+                        android:layout_width="@dimen/search_action_button_geometry"
+                        android:layout_height="@dimen/search_action_button_geometry"
+                        android:layout_margin="@dimen/default_spacing"
+                        android:id="@+id/action_debug"
+                        android:visibility="gone"
+                        android:background="@android:color/transparent"
+                        android:src="@drawable/baseline_extension_24"
+                        android:contentDescription="@string/settings_debug_button"
+                        />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
 
                     <ImageButton
                         android:layout_width="@dimen/search_action_button_geometry"
@@ -68,6 +83,19 @@
                         />
                 </LinearLayout>
 
+                <TextView
+                    android:id="@+id/debug_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:maxLines="10"
+                    android:scrollbars="vertical"
+                    android:paddingHorizontal="@dimen/search_bar_input_padding"
+                    android:paddingBottom="@dimen/default_spacing"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/result_extra_font"
+                    android:fontFamily="monospace" />
+
 
                 <androidx.cardview.widget.CardView
                     android:layout_width="match_parent"
@@ -75,29 +103,29 @@
                     style="@style/Theme.Launchpad.SearchBar">
 
                     <EditText
+                        android:id="@+id/search_input"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:paddingHorizontal="@dimen/search_bar_input_padding"
-                        android:layout_gravity="center"
+                        android:layout_gravity="start"
 
-                        android:drawableLeft="@drawable/baseline_search_24"
                         android:background="@android:color/transparent"
+                        android:drawableLeft="@drawable/baseline_search_24"
+                        android:drawablePadding="8dp"
+                        android:focusable="true"
+
+
+                        android:focusableInTouchMode="true"
                         android:hint="@string/search_bar_input_text"
-
-
-                        android:singleLine="true"
-                        android:textAlignment="center"
-                        android:textColorHint="@color/text_hint"
-                        android:textColor="@color/text_primary"
-
+                        android:imeOptions="actionSearch"
                         android:inputType="text"
 
-                        android:focusable="true"
-                        android:focusableInTouchMode="true"
+                        android:paddingHorizontal="@dimen/search_bar_input_padding"
 
-                        android:id="@+id/search_input"
-                        android:imeOptions="actionSearch"
-                        >
+                        android:singleLine="true"
+                        android:textAlignment="viewStart"
+
+                        android:textColor="@color/text_primary"
+                        android:textColorHint="@color/text_hint">
 
                     </EditText>
 
@@ -109,7 +137,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/search_suggestions_holder_height"
                     android:id="@+id/search_suggestions_view"
-                    android:padding="8dp">
+                    android:padding="8dp"
+                    android:requiresFadingEdge="horizontal">
 
                 </androidx.recyclerview.widget.RecyclerView>
 
@@ -121,6 +150,8 @@
                     android:orientation="vertical"
                     android:layout_width="match_parent"
                     android:layout_height="@dimen/search_result_holder_height"
+                    android:layout_marginTop="@dimen/search_results_overlap"
+                    android:requiresFadingEdge="vertical"
                     android:id="@+id/results_view">
 
                 </androidx.recyclerview.widget.RecyclerView>

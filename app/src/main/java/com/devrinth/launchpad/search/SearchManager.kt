@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -16,6 +17,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.devrinth.launchpad.BuildConfig
+import com.devrinth.launchpad.R
 import com.devrinth.launchpad.adapters.ResultAdapter
 import com.devrinth.launchpad.adapters.ResultScrollAdapter
 import com.devrinth.launchpad.adapters.SearchSuggestionListAdapter
@@ -33,28 +35,26 @@ class SearchManager(
     searchTextBox: EditText,
     private var resultRecyclerView: RecyclerView,
     private var searchSuggestionsView: RecyclerView,
-    searchCardLayout: LinearLayout
+    searchCardLayout: LinearLayout,
+    private val isAlternateLayout: Boolean = false,
+    private val onResultsChanged: (() -> Unit)? = null,
 ) {
 
     private var searchQuery: String = ""
+
+    private var previousQuery: String = ""
+
     private var pluginList = arrayListOf<SearchPlugin>()
     private var pluginsMap = mapOf(
 
-        "int-link-handler" to UrlHandlerPlugin(mContext),
-
-        "int-search" to SearchSuggestionsPlugin(mContext),
-
-        "apps" to LauncherPlugin(mContext),
+        "search_suggestions" to SearchSuggestionsPlugin(mContext),
+        "apps" to AppsPlugin(mContext),
         "contacts" to ContactsPlugin(mContext),
-        "calc" to CalculatorPlugin(mContext),
+        "calculator" to CalculatorPlugin(mContext),
         "websearch" to WebSearchPlugin(mContext),
         "units" to UnitConversionPlugin(mContext),
         "settings" to SettingsPlugin(mContext),
         "shortcuts" to ShortcutsPlugin(mContext),
-//        "definition" to DefinitionPlugin(mContext),
-//        "fdroid" to FDroidPlugin(mContext)
-//        "files" to FileSearchPlugin(mContext),
-
 
     )
 
@@ -63,8 +63,12 @@ class SearchManager(
     private var resultArray = ArrayList<ResultAdapter>()
     private var resultScrollAdapter: ResultScrollAdapter
 
+    private var displayedResults = mutableSetOf<ResultAdapter>()
+
     private var searchSuggestions = ArrayList<ResultAdapter>()
     private var searchSuggestionListAdapter: SearchSuggestionListAdapter
+
+    private var displayedSuggestions = mutableSetOf<ResultAdapter>()
 
     private var externalSearch : ExternalSearch = ExternalSearch(mContext)
 
@@ -73,10 +77,19 @@ class SearchManager(
 
     private var enabledPlugins: MutableSet<String>? = null
 
-    private val TAG : String = "PLUGIN MANAGER"
-
     private var firstQuery: Boolean = true
 
+    private val TAG : String = "PLUGIN MANAGER"
+
+    /**
+     * Plugins whose matching is monotone under query shortening: any row shown
+     * for query Q still matches Q minus its last char (substring/fuzzy/prefix
+     * containment only grows when the query shrinks). Rows from these plugins
+     * are safe to keep on screen while a deletion refills, so there is never
+     * an empty flash. Everything else (calculator evals, websearch text,
+     * suggestion chips, similarity scores) is query-specific and dropped.
+     */
+    private val MONOTONE_PLUGINS = setOf("apps", "settings", "shortcuts")
 
     init {
         searchSuggestionsView.layoutManager = LinearLayoutManager(mContext, LinearLayoutManager.HORIZONTAL, false)
@@ -108,89 +121,203 @@ class SearchManager(
         resultScrollAdapter = ResultScrollAdapter(resultArray, mContext)
         resultRecyclerView.adapter = resultScrollAdapter
 
+        // No insert/remove animations: with per-keystroke filtering plus
+        // staggered async plugin results, the default item animator turns
+        // every query change into a fade/slide cascade (visible flicker).
+        // Rows now swap instantly instead.
+        resultRecyclerView.itemAnimator = null
+        searchSuggestionsView.itemAnimator = null
+
         if (!sharedPreferences.getBoolean("setting_clear_search", true)) {
             searchTextBox.setText(sharedPreferences.getString("LAST_SEARCH_QUERY", ""))
+            searchTextBox.setSelection(searchTextBox.text.length)
         }
         searchCardLayout.post {
             processQuery()
         }
-
         externalSearch.listener = object : ExternalSearch.ExternalSearchListener {
-            override fun onExternalSearchResult(result: ResultAdapter, query: String) {
-                appendResult(result, query)
+            override fun onExternalSearchResult(result: ResultAdapter, query: String, pluginPackage: String?) {
+                addResults(listOf(result), query, pluginPackage)
             }
         }
     }
 
     fun unloadPlugins() {
+        enabledPlugins?.forEach {
+            val plugin = pluginsMap[it]
+            if (plugin != null) {
+                try {
+                    plugin.pluginUnInit()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error unloading plugin $it: ${e.localizedMessage}")
+                }
+            } else {
+                Log.w(TAG, "Plugin $it not found in pluginsMap")
+            }
+        }
         enabledPlugins = null
         externalSearch.unloadPlugins()
     }
 
-    // Initializes all the plugin classes and loads them into memory.
+    /*
+    *  PLUGIN LOADING
+    *
+    *  -> This may look complicated, but this was built to load the plugins asynchronously, and add listeners for the loaded plugins.
+    *  -> Might add a less messy way to load plugins in the future.
+    *
+    *  */
+    private fun loadPlugin(pluginName: String, isInternalPlugin: Boolean = false) {
+
+        val plugin = pluginsMap[pluginName]!!
+
+        try {
+            plugin.pluginInit()
+
+        } catch (e : Exception) {
+            Log.e(pluginName, e.localizedMessage!!)
+
+        } finally {
+
+            pluginList.add(plugin)
+            plugin.onPluginResult { resultArray, query ->
+                if (BuildConfig.DEBUG)
+                    Log.d(TAG, "${pluginName.uppercase()} returned ${resultArray.size} values")
+
+                if (!isInternalPlugin) {
+
+                    if (pluginName == "search_suggestions") {
+                        addSearchSuggestions(resultArray, query)
+                    } else {
+                        if (plugin.PRIORITY > 0) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                kotlinx.coroutines.delay((80 * (plugin.PRIORITY).toLong()))
+                                addResults(resultArray, query, pluginName)
+                            }
+                        } else {
+                            addResults(resultArray, query, pluginName)
+                        }
+                    }
+                } else {
+                    // TODO: Internal Plugins
+                }
+            }
+
+        }
+    }
     fun reloadPlugins() {
-
         actionSearchOpen = sharedPreferences.getBoolean("setting_top_result_default", true)
-
         enabledPlugins = sharedPreferences.getStringSet("setting_search_plugins", pluginsMap.keys)
 
+        externalSearch.unloadPlugins()
         pluginList = arrayListOf()
+
         CoroutineScope(Dispatchers.Main).launch {
             pluginsMap.forEach { plugin ->
                 val isInternalPlugin = plugin.key.contains("int-")
-
-                if (enabledPlugins!!.contains(plugin.key) || enabledPlugins!!.isEmpty() || (isInternalPlugin)){
-                    try {
-                        // Load the plugin into memory if it's enabled by the userlist
-                        plugin.value.pluginInit()
-
-                    } catch (e : Exception) {
-                        Log.e(plugin.key, e.localizedMessage!!)
-                    } finally {
-
-                        pluginList.add(plugin.value)
-                        plugin.value.onPluginResult { resultArray, query ->
-                            if (BuildConfig.DEBUG)
-                                Log.d(TAG, "${plugin.key.uppercase()} returned ${resultArray.size} values")
-
-                            if (!isInternalPlugin) {
-                                resultArray.forEach { res ->
-                                    appendResult(res, query, plugin.key)
-                                }
-                            } else {
-                                if (plugin.key.contains("int-search")) {
-                                    resultArray.forEach { res ->
-                                        searchSuggestions.add( res )
-                                        searchSuggestionListAdapter.notifyItemChanged(searchSuggestions.size - 1)
-                                    }
-                                }
-
-                            }
-
-                        }
-                    }
+                if (enabledPlugins!!.contains(plugin.key) || enabledPlugins!!.isEmpty() || (isInternalPlugin)) {
+                    loadPlugin(plugin.key, isInternalPlugin)
                 }
             }
+            // Plugins init above; if the query is empty the top-hits request
+            // may have fired before AppsPlugin was ready (fresh overlay open).
+            // Re-request so recently-used apps show immediately instead of
+            // only appearing after the first typed query.
+            if (searchQuery.isEmpty()) {
+                (pluginsMap["apps"] as? AppsPlugin)?.pluginProcess("")
+            }
+        }
+
+        externalSearch.bindAvailablePlugins()
+
+    }
+
+    private fun addSearchSuggestions(suggestions: List<ResultAdapter>, query: String) {
+        if (!searchQuery.equals(query, ignoreCase = true)) return
+
+        val newSuggestions = suggestions.filter { newSuggestion ->
+            !displayedSuggestions.contains(newSuggestion) &&
+            !searchSuggestions.any { existingSuggestion ->
+                isDuplicateSuggestion(existingSuggestion, newSuggestion)
+            }
+        }
+
+        if (newSuggestions.isNotEmpty()) {
+            val startIndex = searchSuggestions.size
+            searchSuggestions.addAll(newSuggestions)
+            displayedSuggestions.addAll(newSuggestions)
+            searchSuggestionListAdapter.notifyItemRangeInserted(startIndex, newSuggestions.size)
         }
     }
 
-    private fun appendResult(result: ResultAdapter, query : String, plugin: String? = "default") {
-        if (searchQuery.equals(query, ignoreCase = true)) {
-            resultArray.add(result)
-            resultScrollAdapter.notifyItemChanged(resultArray.size - 1)
+    private fun addResults(results: List<ResultAdapter>, query: String, plugin: String? = "default") {
+        if (!searchQuery.equals(query, ignoreCase = true)) return
+
+        val newResults = results.filter { newResult ->
+            !displayedResults.contains(newResult) &&
+            !resultArray.any { existingResult ->
+                isDuplicateResult(existingResult, newResult)
+            }
         }
+
+        if (newResults.isNotEmpty()) {
+            // Tag untagged results with the producing plugin before they enter
+            // the displayed set (data-class equality includes the tag, so this
+            // must happen before any set insertion).
+            newResults.forEach { it.sourcePlugin = it.sourcePlugin ?: plugin }
+            val startIndex = resultArray.size
+            resultArray.addAll(newResults)
+            displayedResults.addAll(newResults)
+            resultScrollAdapter.notifyItemRangeInserted(startIndex, newResults.size)
+            notifyResultsChanged()
+        }
+    }
+
+    private fun notifyResultsChanged() {
+        try {
+            onResultsChanged?.invoke()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun isDuplicateResult(existing: ResultAdapter, new: ResultAdapter): Boolean {
+        return existing.value == new.value &&
+               existing.extra == new.extra &&
+               existing.action1?.toString() == new.action1?.toString()
+    }
+
+    private fun isDuplicateSuggestion(existing: ResultAdapter, new: ResultAdapter): Boolean {
+        return existing.value == new.value
     }
 
     private fun processQuery() {
+        val isTypingForward = searchQuery.length > previousQuery.length &&
+                             searchQuery.startsWith(previousQuery, ignoreCase = true)
 
         if (searchQuery.isEmpty()) {
-            resultRecyclerView.visibility = View.GONE
-
+            resultRecyclerView.visibility = View.VISIBLE
+            searchSuggestionsView.visibility = View.GONE
+            setResultsGap(true)
+            clearAllResults()
+            clearAllSuggestions()
+            // Empty query: only AppsPlugin responds, with top hits (apps
+            // launched >3x in the last 2 days). Other plugins stay quiet.
+            (pluginsMap["apps"] as? AppsPlugin)?.pluginProcess(searchQuery)
+            previousQuery = searchQuery
+            return
         } else {
             resultRecyclerView.visibility = View.VISIBLE
+            setResultsGap(false)
         }
-        resultArray.removeAll(resultArray.toSet())
-        resultScrollAdapter.notifyDataSetChanged()
+
+        if (isTypingForward) {
+            filterExistingResultsForward()
+        } else {
+            // Deletion/shortening: kept rows still match (monotone matchers),
+            // so keep them on screen while only query-specific rows drop.
+            // Clearing everything here caused an empty flash.
+            dropNonMonotoneRows()
+            clearAllSuggestions()
+        }
 
         if (firstQuery && searchQuery.isNotEmpty()) {
             firstQuery = false
@@ -200,16 +327,130 @@ class SearchManager(
             searchSuggestionsView.visibility = View.GONE
         } else {
             searchSuggestionsView.visibility = View.VISIBLE
+            if (isTypingForward) {
+                filterExistingSuggestionsForward()
+            }
         }
 
-        searchSuggestions.removeAll(searchSuggestions.toSet())
-        searchSuggestionListAdapter.notifyDataSetChanged()
+        // Fan out immediately: with item animations off and stale-query
+        // results guarded in addResults, there is no flicker left to debounce
+        // against — delaying only creates an empty hole. The visible list was
+        // already narrowed synchronously above.
+        fanOutNow(searchQuery)
 
-        externalSearch.sendQuery(searchQuery)
+        previousQuery = searchQuery
+    }
 
+    private fun fanOutNow(query: String) {
+        externalSearch.sendQuery(query)
         pluginList.forEach { mPlugin ->
-            mPlugin.pluginProcess(searchQuery)
+            mPlugin.pluginProcess(query)
         }
+    }
 
+    /**
+     * Drops rows from non-monotone plugins (query-specific content) while
+     * keeping rows that still match the shortened query. Single notification
+     * since item animations are disabled.
+     */
+    private fun dropNonMonotoneRows() {
+        if (resultArray.isEmpty()) return
+        val kept = resultArray.filter { it.sourcePlugin in MONOTONE_PLUGINS }
+        if (kept.size == resultArray.size) return
+        resultArray.clear()
+        resultArray.addAll(kept)
+        displayedResults.clear()
+        displayedResults.addAll(kept)
+        resultScrollAdapter.notifyDataSetChanged()
+        notifyResultsChanged()
+    }
+
+    /**
+     * Breathing room between the search bar and the results, but only when the
+     * query is empty (top hits, no recommendation chips). While searching the
+     * original tight overlap is restored.
+     */
+    private fun setResultsGap(empty: Boolean) {
+        val res = resultRecyclerView.context.resources
+        val gap = res.getDimensionPixelSize(R.dimen.search_results_top_gap)
+        val overlap = res.getDimensionPixelSize(R.dimen.search_results_overlap)
+        val params = resultRecyclerView.layoutParams as? ViewGroup.MarginLayoutParams
+            ?: return
+        if (isAlternateLayout) {
+            params.bottomMargin = if (empty) gap else 0
+        } else {
+            params.topMargin = if (empty) gap else overlap
+        }
+        resultRecyclerView.layoutParams = params
+    }
+
+    private fun clearAllResults() {
+        if (resultArray.isNotEmpty()) {
+            val count = resultArray.size
+
+            resultArray.clear()
+            displayedResults.clear()
+            resultScrollAdapter.notifyItemRangeRemoved(0, count)
+            notifyResultsChanged()
+        }
+    }
+
+    private fun clearAllSuggestions() {
+        if (searchSuggestions.isNotEmpty()) {
+            val count = searchSuggestions.size
+
+            searchSuggestions.clear()
+            displayedSuggestions.clear()
+            searchSuggestionListAdapter.notifyItemRangeRemoved(0, count)
+        }
+    }
+
+    private fun filterExistingResultsForward() {
+        val iterator = resultArray.iterator()
+
+        var index = 0
+        var removed = false
+        while (iterator.hasNext()) {
+            val result = iterator.next()
+
+            if (!resultMatchesQuery(result, searchQuery)) {
+
+                iterator.remove()
+                displayedResults.remove(result)
+                resultScrollAdapter.notifyItemRemoved(index)
+                removed = true
+            } else {
+                index++
+            }
+        }
+        if (removed) notifyResultsChanged()
+    }
+
+    private fun filterExistingSuggestionsForward() {
+        val iterator = searchSuggestions.iterator()
+        var index = 0
+        while (iterator.hasNext()) {
+            val suggestion = iterator.next()
+
+            if (!suggestionMatchesQuery(suggestion, searchQuery)) {
+
+                iterator.remove()
+                displayedSuggestions.remove(suggestion)
+                searchSuggestionListAdapter.notifyItemRemoved(index)
+            } else {
+                index++
+            }
+        }
+    }
+
+    private fun resultMatchesQuery(result: ResultAdapter, query: String): Boolean {
+        // Check the package id too: AppsPlugin matches on package name, so a
+        // label-only check here would drop package-only hits while typing forward.
+        return result.value.contains(query, ignoreCase = true) ||
+            (result.extra?.contains(query, ignoreCase = true) == true)
+    }
+
+    private fun suggestionMatchesQuery(suggestion: ResultAdapter, query: String): Boolean {
+        return suggestion.value.contains(query, ignoreCase = true)
     }
 }

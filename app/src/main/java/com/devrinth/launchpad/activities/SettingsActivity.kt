@@ -1,14 +1,11 @@
 package com.devrinth.launchpad.activities
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.PendingIntent
+
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Build.VERSION_CODES
@@ -22,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.devrinth.launchpad.BuildConfig
 import com.devrinth.launchpad.R
 import com.devrinth.launchpad.fragments.LaunchPadPreferences
+import com.devrinth.launchpad.fragments.PluginManagerPreferences
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
 import com.devrinth.launchpad.services.LaunchpadTileService
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -31,29 +29,43 @@ import java.util.concurrent.Executors
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var settingsContainer : View
+    private lateinit var pluginManagerContainer : View
     private lateinit var homeContainer : View
     private lateinit var navigationBarView: BottomNavigationView
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.settings_layout)
 
         val window = this.window
-        val surfaceColor = SurfaceColors.SURFACE_5.getColor(baseContext)
 
-        window.statusBarColor = surfaceColor
+        val isDarkTheme = (resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
 
+        val statusBarColor = ContextCompat.getColor(this, R.color.launchpad_background)
+        val navBarColor = ContextCompat.getColor(this, R.color.primary_dark)
+
+        window.statusBarColor = statusBarColor
+        window.navigationBarColor = navBarColor
+        if (isDarkTheme) {
+            window.decorView.systemUiVisibility = 0 // dark icons off
+        } else {
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
+
+        // Initialize the new preference-based plugin management
         supportFragmentManager.beginTransaction()
             .replace(R.id.settings_container, LaunchPadPreferences())
             .commit()
 
+        // Initialize the plugin manager preferences
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.plugin_preferences_container, PluginManagerPreferences())
+            .commit()
+
         initViews()
         checkDefaults()
-
-//        if (intent.getBooleanExtra("from_launchpad", false)) {
-//            navigationBarView.selectedItemId = R.id.navigation_settings
-//        }
     }
 
     private val REQUEST_CODE_CONTACTS = 700
@@ -132,6 +144,8 @@ class SettingsActivity : AppCompatActivity() {
 
         settingsContainer = findViewById(R.id.settings_container)
         homeContainer = findViewById(R.id.home_container)
+        pluginManagerContainer = findViewById(R.id.plugin_manager_container)
+
         navigationBarView = findViewById(R.id.bottom_navigation)
 
         findViewById<View>(R.id.home_allow_contacts).setOnClickListener {
@@ -139,41 +153,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.home_change_assist).setOnClickListener {
             startActivity( Intent( Settings.ACTION_VOICE_INPUT_SETTINGS ) )
-        }
-
-        findViewById<View>(R.id.home_button_shortcut).setOnClickListener {
-            val shortcutManager =
-                this.getSystemService(ShortcutManager::class.java)
-
-            if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported) {
-                val shortcutInfo = ShortcutInfo.Builder(this, "launchpad_shortcut")
-                    .setShortLabel(getString(R.string.shortcut_short_label))
-                    .setLongLabel(getString(R.string.shortcut_long_label))
-                    .setIcon(Icon.createWithResource(this, R.drawable.shortcut_icon))
-                    .setIntent(Intent(this, LaunchpadOverlayActivity::class.java).apply {
-                        action = Intent.ACTION_VIEW
-                    })
-                    .build()
-
-                val pinnedShortcutCallbackIntent =
-                    shortcutManager.createShortcutResultIntent(shortcutInfo)
-
-                val successCallback = PendingIntent.getBroadcast(
-                    this,
-                    0,
-                    pinnedShortcutCallbackIntent,
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-
-                shortcutManager.requestPinShortcut(shortcutInfo, successCallback.intentSender)
-            } else {
-                Toast.makeText(
-                    this,
-                    getString(R.string.general_warning_pinned_shortcut),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-
         }
 
         findViewById<View>(R.id.home_button_qs_tile).setOnClickListener {
@@ -202,23 +181,21 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, getString(R.string.general_warning_qs_tile), Toast.LENGTH_SHORT).show()
             }
         }
-
+        val navigationMap = mapOf(
+            R.id.navigation_settings to settingsContainer,
+            R.id.navigation_home to homeContainer,
+            R.id.navigation_plugins to pluginManagerContainer
+        )
         navigationBarView.setOnItemSelectedListener {item ->
-            when(item.itemId) {
-                R.id.navigation_settings -> {
-                    settingsContainer.visibility = View.VISIBLE
-                    homeContainer.visibility = View.GONE
-                    true
+            navigationMap.forEach { (t, u) ->
+                if (t == item.itemId) {
+                    u.visibility = View.VISIBLE
+                } else {
+                    u.visibility = View.GONE
                 }
-                R.id.navigation_home -> {
-                    settingsContainer.visibility = View.GONE
-                    homeContainer.visibility = View.VISIBLE
-                    true
-                }
-                else -> false
             }
+            true
         }
-
     }
 
     override fun onDestroy() {

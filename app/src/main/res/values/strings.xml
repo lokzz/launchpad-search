@@ -1,9 +1,17 @@
-<resources>
+<resources tools:ignore="MissingTranslation" xmlns:tools="http://schemas.android.com/tools">
+
     <string name="app_name" translatable="false">Launchpad</string>
 
     <string name="shortcut_short_label">Launchpad Search</string>
     <string name="shortcut_long_label">Launchpad Search</string>
     <string name="shortcut_disabled_label">Launchpad shortcut is disabled</string>
+
+    <string name="shortcut_assistant_label">Assist Settings</string>
+    <string name="shortcut_assistant_long_label">Set as Assistant </string>
+
+    <string name="menu_home">Home</string>
+    <string name="menu_plugins">Plugins</string>
+    <string name="menu_settings">Settings</string>
 
     <string name="search_bar_input_text">Search here…</string>
 
@@ -45,6 +53,9 @@
 
     <string name="settings_top_result_default">Submit opens top result</string>
     <string name="settings_top_result_default_summary">The top result will be the opened when pressing Enter or the \'Search button\' in your keyboard</string>
+
+    <string name="settings_debug_button">Debug Button</string>
+    <string name="settings_debug_button_summary">Show a small debug button in the search window</string>
 
     <string name="settings_layout_title">Layout</string>
 
@@ -95,6 +106,16 @@
     <string translatable="false" name="search_google_query">Google|https://www.google.com/search?q=%s</string>
     <string translatable="false" name="search_duckduckgo_query">DuckDuckGo|https://duckduckgo.com/?q=%s</string>
     <string translatable="false" name="search_bing_query">Bing|https://www.bing.com/search?q=%s</string>
+    <string translatable="false" name="search_brave_query">Brave|https://search.brave.com/search?q=%s</string>
+    <string translatable="false" name="search_ecosia_query">Ecosia|https://www.ecosia.org/search?q=%s</string>
+    <string translatable="false" name="search_qwant_query">Qwant|https://www.qwant.com/?q=%s</string>
+    <string translatable="false" name="search_reddit_query">Reddit|https://www.reddit.com/search/?q=%s</string>
+    <string translatable="false" name="search_metager_query">MetaGer|https://metager.org/meta/meta.ger3?eingabe=%s</string>
+    <string translatable="false" name="search_startpage_query">Startpage|https://www.startpage.com/search?q=%s</string>
+    <string translatable="false" name="search_swisscows_query">Swisscows|https://swisscows.com/en/web?query=%s</string>
+    <string translatable="false" name="search_wolframalpha_query">Wolfram Alpha|https://www.wolframalpha.com/input?i==%s</string>
+    <string translatable="false" name="search_perplexity_query">Perplexity|https://www.perplexity.ai/search?q=%s</string>
+    <string translatable="false" name="search_phind_query">Phind|https://www.phind.com/search?q=%s</string>
 
     <!--  INFO  -->
     <string name="contact_mail_template_subject">Launchpad Search: Support</string>
@@ -106,8 +127,5 @@ Version: %s
     <string translatable="false" name="link_privacy">https://devrinth-studio.web.app/privacy.html</string>
     <string translatable="false" name="link_website">https://devrinth-studio.web.app/</string>
     <string translatable="false" name="link_mail">devrinth.studio@gmail.com</string>
-
-
-
 
 </resources>

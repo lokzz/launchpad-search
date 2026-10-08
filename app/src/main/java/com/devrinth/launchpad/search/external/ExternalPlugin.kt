@@ -16,13 +16,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class ExternalSearch(var mContext: Context) {
+
     interface ExternalSearchListener {
-        fun onExternalSearchResult(result: ResultAdapter, query: String)
+        fun onExternalSearchResult(result: ResultAdapter, query: String, pluginPackage: String? = null)
     }
+
     private val connections = mutableMapOf<String, IPluginService>()
     private val serviceConnections = mutableMapOf<String, ServiceConnection>()
-
-//    private var pluginConnection: ServiceConnection? = null
 
     var listener: ExternalSearchListener? = null
 
@@ -49,7 +49,7 @@ class ExternalSearch(var mContext: Context) {
         }
     }
 
-    private fun bindAvailablePlugins() {
+    fun bindAvailablePlugins() {
         val intent = Intent("com.devrinth.launchpad.PLUGIN_SERVICE")
         val pm = mContext.packageManager
         val services = pm.queryIntentServices(intent, PackageManager.GET_META_DATA)
@@ -79,6 +79,7 @@ class ExternalSearch(var mContext: Context) {
             )
         }
     }
+
     private fun queryAllPlugins(query: String) {
         for ((pkg, plugin) in connections) {
             try {
@@ -93,7 +94,7 @@ class ExternalSearch(var mContext: Context) {
                                 ) },
                                 if (response.action1 != "")  { IntentUtils.getLinkIntent(response.action1) } else { null },
                                 null
-                            ), response.query)
+                            ), response.query, pkg)
                         }
                     }
                 })
