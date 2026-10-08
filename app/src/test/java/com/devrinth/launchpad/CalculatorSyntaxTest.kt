@@ -169,5 +169,6 @@ class CalculatorSyntaxTest {
         // Plain queries pass through untouched.
         assertEquals("2+2", CalculatorSyntax.displayExpand("2+2"))
         assertEquals("2^3", CalculatorSyntax.displayExpand("2^3"))
+        assertEquals("2*2.718281828459045", CalculatorSyntax.displayExpand("2e"))
     }
 }

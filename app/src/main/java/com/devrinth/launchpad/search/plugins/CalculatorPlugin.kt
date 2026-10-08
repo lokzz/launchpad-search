@@ -35,7 +35,7 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
             Regex("""(?<![\w.])(\d+(?:\.\d+)?)[eE]([+-]?\d+)(?![\w])""")
         private val MAGNITUDE =
             Regex(
-                """(\d+(?:\.\d+)?)\s*(hundreds|hundred|thousands|thousand|millions|million|mil|m|billions|billion|bil|b|trillions|trillion|t|quadrillions|quadrillion|quintillions|quintillion)\b""",
+                """(\d+(?:\.\d+)?)\s*(hundreds|hundred|thousands|thousand|k|millions|million|mil|m|billions|billion|bil|b|trillions|trillion|t|quadrillions|quadrillion|quintillions|quintillion)\b""",
                 RegexOption.IGNORE_CASE
             )
         private val EULER_TOKEN = Regex("""(?<![A-Za-z_.])e(?![A-Za-z_])""")
@@ -57,7 +57,8 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
             expr = MAGNITUDE.replace(expr) { m ->
                 "(${m.groupValues[1]}*${MULTIPLIERS[m.groupValues[2].lowercase()]})"
             }
-            expr = EULER_TOKEN.replace(expr, "($EULER)")
+            val beforeEuler = expr
+            expr = EULER_TOKEN.replace(beforeEuler) { m -> eulerReplacement(beforeEuler, m.range.first, "($EULER)") }
             return Normalized(expr, expr != caret)
         }
 
@@ -73,8 +74,20 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
                     .multiply(java.math.BigDecimal(MULTIPLIERS[m.groupValues[2].lowercase()]))
                     .stripTrailingZeros().toPlainString()
             }
-            expr = EULER_TOKEN.replace(expr, EULER)
+            val beforeEuler = expr
+            expr = EULER_TOKEN.replace(beforeEuler) { m -> eulerReplacement(beforeEuler, m.range.first, EULER) }
             return expr
+        }
+
+        /**
+         * Bare `e` needs an explicit `*` when it directly follows a number or
+         * closing paren (`2e` -> `2*(E)`); otherwise the digits would fuse
+         * (`22.718...`). Anywhere else it stands alone.
+         */
+        private fun eulerReplacement(expr: String, matchStart: Int, euler: String): String {
+            val star = matchStart > 0 &&
+                (expr[matchStart - 1].isDigit() || expr[matchStart - 1] == ')')
+            return (if (star) "*" else "") + euler
         }
     }
 
