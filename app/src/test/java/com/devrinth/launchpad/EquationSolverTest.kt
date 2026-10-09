@@ -41,14 +41,26 @@ class EquationSolverTest {
         // Infinite solutions.
         assertNull(solve("0x = 0"))
         assertNull(solve("2x + 1 = 2x + 1"))
+        assertNull(solve("1/x = 1/x"))
         // No solution.
         assertNull(solve("0x = 1"))
-        // Nonlinear rejected, not mis-solved.
-        assertNull(solve("x^2 = 2"))
+        assertNull(solve("1/x = 0"))
         // No variable at all.
         assertNull(solve("2 + 2 = 4"))
         // Garbage.
         assertNull(solve("x = "))
         assertNull(solve("= 1"))
+    }
+
+    @Test
+    fun numericFallback() {
+        // Touch root with no sign change.
+        assertEquals(Math.PI / 2, solve("sin(x) = 1")!!, 1e-6)
+        // Pole at the origin; seed 1 hits immediately.
+        assertEquals(1.0, solve("(2/x) = 2")!!, 1e-9)
+        // Plain quadratic finds the positive root.
+        assertEquals(Math.sqrt(2.0), solve("x^2 = 2")!!, 1e-6)
+        assertEquals(Math.PI / 2, solve("cos(x) = 0")!!, 1e-6)
+        assertEquals(2.0, solve("x^3 = 8")!!, 1e-6)
     }
 }
