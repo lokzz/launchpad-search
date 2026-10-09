@@ -122,14 +122,26 @@ object EquationSolver {
         var x = x0
         repeat(NEWTON_STEPS) {
             val fx = g(x) ?: return null
-            if (kotlin.math.abs(fx) <= tol) return x
             val h = 1e-6 * maxOf(1.0, kotlin.math.abs(x))
             val fp = g(x + h) ?: return null
             val fm = g(x - h) ?: return null
             val d = (fp - fm) / (2 * h)
-            if (!d.isFinite() || kotlin.math.abs(d) < 1e-12) return null
+            if (!d.isFinite() || kotlin.math.abs(d) < 1e-12) {
+                // Derivative dead: accept only an already-verified root.
+                return if (kotlin.math.abs(fx) <= tol) x else null
+            }
+            val prev = x
             x = x - fx / d
             if (!x.isFinite() || kotlin.math.abs(x) > MAX_ABS_X) return null
+            // Flat (multiple) roots satisfy |f| <= tol long before x settles,
+            // so also require stagnation -- otherwise `sin(x) = 1` stops 3e-5
+            // short of pi/2.
+            val fnew = g(x) ?: return null
+            if (kotlin.math.abs(fnew) <= tol &&
+                kotlin.math.abs(x - prev) <= 1e-9 * maxOf(1.0, kotlin.math.abs(x))
+            ) {
+                return x
+            }
         }
         val fx = g(x)
         return if (fx != null && kotlin.math.abs(fx) <= tol) x else null
@@ -143,7 +155,12 @@ object EquationSolver {
             val mid = (lo + hi) / 2
             if (!mid.isFinite()) return null
             val fmid = g(mid) ?: return null
-            if (kotlin.math.abs(fmid) <= tol) return mid
+            // Same flat-root caution as Newton: also require a tiny bracket.
+            if (kotlin.math.abs(fmid) <= tol &&
+                (hi - lo) <= 1e-9 * maxOf(1.0, kotlin.math.abs(mid))
+            ) {
+                return mid
+            }
             if (flo * fmid < 0) {
                 hi = mid
             } else {

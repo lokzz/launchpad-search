@@ -61,5 +61,6 @@ class EquationSolverTest {
         // Plain quadratic finds the positive root.
         assertEquals(Math.sqrt(2.0), solve("x^2 = 2")!!, 1e-6)
         assertEquals(Math.PI / 2, solve("cos(x) = 0")!!, 1e-6)
+        assertEquals(2.0, solve("x^3 = 8")!!, 1e-6)
     }
 }
