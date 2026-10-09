@@ -100,7 +100,7 @@ object EquationSolver {
         val probed = SEEDS.map { it to g(it) }
         // Zero at 3+ spread-out seeds means flat/identity (e.g. `1/x = 1/x`),
         // where any "answer" would be wrong -- stay silent.
-        if (probed.count { it.second != null && kotlin.math.abs(it.second) <= tol } >= 3) {
+        if (probed.count { (_, v) -> v != null && kotlin.math.abs(v) <= tol } >= 3) {
             return null
         }
         for ((seed, fseed) in probed) {
