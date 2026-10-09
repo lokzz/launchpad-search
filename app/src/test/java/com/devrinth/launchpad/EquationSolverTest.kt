@@ -21,8 +21,10 @@ class EquationSolverTest {
         assertFalse(EquationSolver.isEquation("x != 1"))
         assertFalse(EquationSolver.isEquation("x >= 1"))
         assertFalse(EquationSolver.isEquation("x = 1 = 2"))
-        assertFalse(EquationSolver.isEquation("x ="))
-        assertFalse(EquationSolver.isEquation("= 1"))
+        // Barely-shaped but unsolvable sides still count as shape;
+        // solve() rejects them (covered in degenerateIsSilent).
+        assertTrue(EquationSolver.isEquation("x ="))
+        assertTrue(EquationSolver.isEquation("= 1"))
     }
 
     @Test
@@ -47,5 +49,6 @@ class EquationSolverTest {
         assertNull(solve("2 + 2 = 4"))
         // Garbage.
         assertNull(solve("x = "))
+        assertNull(solve("= 1"))
     }
 }
