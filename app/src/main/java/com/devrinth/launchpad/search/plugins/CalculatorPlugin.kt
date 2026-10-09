@@ -113,6 +113,28 @@ class CalculatorPlugin(mContext: Context) : SearchPlugin(mContext) {
         super.pluginProcess(query)
 
         try {
+            // Equations (`2x = 1`) solve to an `x = ...` row. Anything else
+            // takes the normal expression path below. Sides go through the
+            // same normalization, so `1mil * x = 2` works too.
+            val solution = EquationSolver.solve(
+                CalculatorSyntax.normalize(query).expression, Keval::eval
+            )
+            if (solution != null) {
+                val icon = AppCompatResources.getDrawable(mContext, R.drawable.baseline_calculate_24)
+                pluginResult(
+                    arrayListOf(
+                        ResultAdapter(
+                            "x = ${CalculatorSyntax.formatResult(solution)}",
+                            CalculatorSyntax.displayExpand(query),
+                            icon,
+                            null,
+                            null
+                        )
+                    ),
+                    query
+                )
+                return
+            }
             val normalized = CalculatorSyntax.normalize(query)
             val icon = AppCompatResources.getDrawable(mContext, R.drawable.baseline_calculate_24)
             // Single row: the answer with the decompressed numbers as subtitle.
