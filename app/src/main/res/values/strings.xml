@@ -57,6 +57,9 @@
     <string name="settings_debug_button">Debug Button</string>
     <string name="settings_debug_button_summary">Show a small debug button in the search window</string>
 
+    <string name="settings_assistant_button">Assistant Button</string>
+    <string name="settings_assistant_button_summary">Show a shortcut that opens your other assistant</string>
+
     <string name="settings_layout_title">Layout</string>
 
     <string name="settings_layout_blur">Blur behind</string>
