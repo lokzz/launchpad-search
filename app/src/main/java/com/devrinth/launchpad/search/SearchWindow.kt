@@ -145,6 +145,9 @@ class SearchWindow(val context: Context) {
         }
 
         assistantBtn.setOnClickListener {
+            // Close first like the settings button: we're handing off to
+            // another app, so the overlay must not linger on top of it.
+            hideWindow()
             try {
                 AssistantLaunch.openAssistant(context)
             } catch (e: Exception) {

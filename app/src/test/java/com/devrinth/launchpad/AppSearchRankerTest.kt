@@ -70,4 +70,16 @@ class AppSearchRankerTest {
             AppSearchRanker.score("goo", "Files by Google", "com.google.android.apps.nbu.files")
         )
     }
+
+    @Test
+    fun exactMatchTierBeatsFrequent() {
+        // Exact display-name match wins no matter what: tier 0 with or
+        // without usage, ahead of any frequent-but-inexact match.
+        assertEquals(0, AppSearchRanker.tier(0, true))
+        assertEquals(0, AppSearchRanker.tier(0, false))
+        assertEquals(1, AppSearchRanker.tier(1, true))
+        assertEquals(1, AppSearchRanker.tier(4, true))
+        assertEquals(2, AppSearchRanker.tier(1, false))
+        assertEquals(2, AppSearchRanker.tier(4, false))
+    }
 }

@@ -2,6 +2,7 @@ package com.devrinth.launchpad.search.plugins
 
 import android.content.Context
 import android.content.Intent
+import android.speech.RecognizerIntent
 import android.service.voice.VoiceInteractionService
 
 /**
@@ -37,19 +38,30 @@ object AssistantLaunch {
     }
 
     /**
-     * Opens the assistant's app. A third-party app cannot start another
-     * app's VoiceInteractionService directly (system-only binding), so the
-     * launcher intent is the robust trigger.
+     * Opens the assistant's voice UI. A third-party app cannot start another
+     * app's VoiceInteractionService directly (system-only binding:
+     * `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService`
+     * throws SecurityException), so the closest trigger is the public voice
+     * search entry point, forced onto the detected assistant package. Falls
+     * back to the plain launcher intent when unhandled.
      */
     fun openAssistant(context: Context): Boolean {
+        val pkg = findAssistantPackage(context) ?: return false
         return try {
-            val pkg = findAssistantPackage(context) ?: return false
-            val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(launch)
+            val voice = Intent(RecognizerIntent.ACTION_WEB_SEARCH)
+                .setPackage(pkg)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(voice)
             true
         } catch (_: Exception) {
-            false
+            try {
+                val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(launch)
+                true
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 }
