@@ -49,22 +49,27 @@
                         android:layout_width="@dimen/search_action_button_geometry"
                         android:layout_height="@dimen/search_action_button_geometry"
                         android:layout_margin="@dimen/default_spacing"
-                        android:id="@+id/action_assistant"
-                        android:visibility="gone"
-                        android:background="@android:color/transparent"
-                        android:src="@drawable/baseline_sparkle_24"
-                        android:contentDescription="@string/settings_assistant_button"
-                        />
-
-                    <ImageButton
-                        android:layout_width="@dimen/search_action_button_geometry"
-                        android:layout_height="@dimen/search_action_button_geometry"
-                        android:layout_margin="@dimen/default_spacing"
                         android:id="@+id/action_debug"
                         android:visibility="gone"
                         android:background="@android:color/transparent"
                         android:src="@drawable/baseline_extension_24"
                         android:contentDescription="@string/settings_debug_button"
+                        />
+
+                    <Space
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1" />
+
+                    <ImageButton
+                        android:layout_width="@dimen/search_action_button_geometry"
+                        android:layout_height="@dimen/search_action_button_geometry"
+                        android:layout_margin="@dimen/default_spacing"
+                        android:id="@+id/action_assistant"
+                        android:visibility="gone"
+                        android:background="@android:color/transparent"
+                        android:src="@drawable/baseline_sparkle_24"
+                        android:contentDescription="@string/settings_assistant_button"
                         />
 
                     <Space
