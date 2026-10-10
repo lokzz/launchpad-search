@@ -38,30 +38,36 @@ object AssistantLaunch {
     }
 
     /**
-     * Opens the assistant's voice UI. A third-party app cannot start another
-     * app's VoiceInteractionService directly (system-only binding:
+     * Opens the assistant UI. A third-party app cannot start another app's
+     * VoiceInteractionService directly (system-only binding:
      * `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService`
-     * throws SecurityException), so the closest trigger is the public voice
-     * search entry point, forced onto the detected assistant package. Falls
-     * back to the plain launcher intent when unhandled.
+     * throws SecurityException), so we fire the intents its own gateway
+     * activities export, forced onto the detected package:
+     * 1. ACTION_ASSIST -> the assistant gateway (the real entry point).
+     * 2. ACTION_WEB_SEARCH -> voice search UI.
+     * 3. Plain launcher intent (opens the app, no assistant UI).
      */
     fun openAssistant(context: Context): Boolean {
         val pkg = findAssistantPackage(context) ?: return false
+        val attempts = listOf(
+            Intent(Intent.ACTION_ASSIST),
+            Intent(RecognizerIntent.ACTION_WEB_SEARCH),
+        )
+        for (attempt in attempts) {
+            try {
+                attempt.setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(attempt)
+                return true
+            } catch (_: Exception) {
+            }
+        }
         return try {
-            val voice = Intent(RecognizerIntent.ACTION_WEB_SEARCH)
-                .setPackage(pkg)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(voice)
+            val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launch)
             true
         } catch (_: Exception) {
-            try {
-                val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(launch)
-                true
-            } catch (_: Exception) {
-                false
-            }
+            false
         }
     }
 }
