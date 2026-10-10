@@ -60,7 +60,7 @@
                         android:layout_width="@dimen/search_action_button_geometry"
                         android:layout_height="@dimen/search_action_button_geometry"
                         android:layout_margin="@dimen/default_spacing"
-                        android:layout_centerHorizontal="true"
+                        android:layout_toEndOf="@id/action_debug"
                         android:layout_centerVertical="true"
                         android:id="@+id/action_assistant"
                         android:visibility="gone"
