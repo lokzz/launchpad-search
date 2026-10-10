@@ -34,12 +34,14 @@ import com.devrinth.launchpad.adapters.ResultScrollAdapter
 import com.devrinth.launchpad.receivers.AssistantActionReceiver
 import com.devrinth.launchpad.search.plugins.AppLaunchHistory
 import com.devrinth.launchpad.search.plugins.AppUsageStats
+import com.devrinth.launchpad.search.plugins.AssistantLaunch
 
 class SearchWindow(val context: Context) {
 
     private lateinit var closeBtn : ImageButton
     private lateinit var settingsBtn : ImageButton
     private lateinit var debugBtn : ImageButton
+    private lateinit var assistantBtn : ImageButton
     private lateinit var debugPanel : TextView
 
     /** Debug button stage: 0 off (hollow dot) -> 1 small (yellow) -> 2 full (green). */
@@ -99,6 +101,7 @@ class SearchWindow(val context: Context) {
         closeBtn = contentView.findViewById(R.id.action_close)
         settingsBtn = contentView.findViewById(R.id.action_settings)
         debugBtn = contentView.findViewById(R.id.action_debug)
+        assistantBtn = contentView.findViewById(R.id.action_assistant)
         debugPanel = contentView.findViewById(R.id.debug_panel)
         debugPanel.movementMethod = ScrollingMovementMethod.getInstance()
 
@@ -106,6 +109,13 @@ class SearchWindow(val context: Context) {
             debugBtn.visibility = View.VISIBLE
             debugStage = sharedPreferences.getInt("setting_debug_stage", 0).coerceIn(0, 2)
             applyDebugStage()
+        }
+
+        // Only shown when the toggle is on AND another assistant exists.
+        if (sharedPreferences.getBoolean("setting_assistant_button", false) &&
+            AssistantLaunch.findAssistantPackage(context) != null
+        ) {
+            assistantBtn.visibility = View.VISIBLE
         }
 
     }
@@ -131,6 +141,14 @@ class SearchWindow(val context: Context) {
                 applyDebugStage()
             } catch (e: Exception) {
                 Log.e("DebugButton", "debug tap failed", e)
+            }
+        }
+
+        assistantBtn.setOnClickListener {
+            try {
+                AssistantLaunch.openAssistant(context)
+            } catch (e: Exception) {
+                Log.e("AssistantButton", "assistant launch failed", e)
             }
         }
 

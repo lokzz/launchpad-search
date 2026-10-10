@@ -46,6 +46,13 @@
             app:summary="@string/settings_top_result_default_summary" />
 
         <CheckBoxPreference
+            android:icon="@drawable/baseline_sparkle_24"
+            app:key="setting_assistant_button"
+            app:defaultValue="false"
+            app:title="@string/settings_assistant_button"
+            app:summary="@string/settings_assistant_button_summary" />
+
+        <CheckBoxPreference
             android:icon="@drawable/baseline_extension_24"
             app:key="setting_debug_button"
             app:defaultValue="false"
