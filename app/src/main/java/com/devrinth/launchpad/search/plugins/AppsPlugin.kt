@@ -190,7 +190,9 @@ class AppsPlugin(mContext: Context) : SearchPlugin(mContext) {
             // resolution already happened at init. Rank exact > prefix >
             // substring > fuzzy > package-only so "Google" beats
             // "Google Maps" beats "Files by Google" beats package-only hits.
-            // Apps launched >=2x in the last 24h jump ahead of the pack.
+            // Tiering: an exact display-name match always takes the very top,
+            // even above frequent apps; otherwise apps launched >=2x in the
+            // last 24h jump ahead of the pack.
             val ranked = cachedApps.mapNotNull { app ->
                 ensureActive()
                 val score = AppSearchRanker.score(q, app.labelLower, app.packageLower)
@@ -199,7 +201,11 @@ class AppsPlugin(mContext: Context) : SearchPlugin(mContext) {
                     AppUsageStats.isFrequent(history, app.packageName, now)
                 Triple(app, score, frequent)
             }.sortedWith(
-                compareBy({ if (it.third) 0 else 1 }, { it.second }, { it.first.labelLower })
+                compareBy(
+                    { AppSearchRanker.tier(it.second, it.third) },
+                    { it.second },
+                    { it.first.labelLower }
+                )
             )
 
             // Expensive pass last, and only for matches: icon + launch intent.

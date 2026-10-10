@@ -12,8 +12,18 @@ package com.devrinth.launchpad.search.plugins
  * - 3 fuzzy label subsequence ("Goggle" typo-ish for "google")
  * - 4 package-name substring only (label itself doesn't match,
  *   e.g. "Gboard" via `com.google.android.inputmethod.latin`)
+ *
+ * [tier] layers usage above match quality, with one exception: an exact
+ * label match (score 0) always wins tier 0, no matter what. Frequent apps
+ * (>=2 launches in 24h) take tier 1 over better-matching-but-rare apps.
  */
 object AppSearchRanker {
+
+    fun tier(score: Int, frequent: Boolean): Int {
+        if (score == 0) return 0
+        if (frequent) return 1
+        return 2
+    }
 
     fun score(query: String, label: String, packageName: String): Int? {
         val q = query.lowercase().trim()
